@@ -21,12 +21,14 @@ export default function Home() {
             <div className="avatar-container">
               <img src="/profile.jpg" alt="My Avatar" /> 
             </div>
-            <h1 className="profile-name">Saiushi</h1>
+            <h1 className="profile-name">Sai</h1>
           </div>
-          <p className="profile-bio">
-            愛がなければ視えない. Without love, it cannot be seen.
-          </p>
+          <div className="profile-bio-wrapper">
+        <p className="profile-bio">
+            愛がなければ視えない。Without love, it cannot be seen.
+            </p>
         </div>
+    </div>
 
         {/* The 3-Column Status Dashboard */}
         <SpotifyStatus />

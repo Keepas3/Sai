@@ -188,11 +188,19 @@
     }
 
     .profile-bio {
-        font-size: 1rem;
-        color: rgba(255, 255, 255, 0.85);
-        line-height: 1.6;
-        max-width: 1100px;
-    }
+    font-family: 'Times New Roman', Times, serif; /* Serif mimics a brush-stroke/Mincho style */
+    font-size: 1.25rem; /* Larger, more readable */
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.8;
+    letter-spacing: 0.05em; /* Subtle spacing adds elegance */
+    font-style: italic; /* Adds a sophisticated touch */
+    max-width: 800px;
+    margin-top: 1rem;
+    padding: 1rem;
+    border-left: 2px solid #e5729f; /* Adds a Japanese 'accent' line */
+    background: rgba(0, 0, 0, 0.2); /* Soft glass backing to help it stand out from the banner */
+    border-radius: 0 8px 8px 0;
+}
 
     /* --- Section & Grid Layouts --- */
     .portfolio-section {
@@ -620,7 +628,12 @@
     background: #f26e8c;
     transform: scale(1.2);
 }
-
+.gallery-meta {
+    margin-top: 2rem; /* Creates the space between the image and text */
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;    
+}
 /* ==========================================================================
    FOOTER SECTION
    ========================================================================== */
