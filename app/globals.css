@@ -1,26 +1,684 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@layer utilities {
+    /* --- Global Resets --- */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    html {
+        scroll-behavior: smooth;
+        overflow-y: scroll;
+    }
+
+    body {
+        font-family: system-ui, -apple-system, sans-serif;
+        color: #ffffff;
+        background: #000000;
+        overflow-x: hidden;
+        min-height: 100vh;
+        width: 100%;
+    }
+
+    /* --- Background Canvas Rule --- */
+    #sakura-canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: -1;
+        pointer-events: none;
+        display: block;
+    }
+
+    /* --- Modern Fixed Navigation Bar --- */
+    .navbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 70px; 
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 10%;
+        z-index: 1000;
+        background: rgba(17, 20, 36, 0.65);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .nav-logo {
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        color: #ffd7e1; /* This is your signature pinkish-white color */
+    }
+
+    /* --- ADD THIS NEW RULE --- */
+    .nav-logo a {
+        text-decoration: none; /* Removes the underline */
+        color: inherit; /* Forces the link to use the #ffd7e1 color from above instead of the default purple */
+    }
+
+    .nav-links {
+        display: flex;
+        list-style: none;
+        gap: 2rem;
+    }
+
+    .nav-links a {
+        text-decoration: none;
+        color: rgba(255, 255, 255, 0.8);
+        font-weight: 500;
+        transition: color 0.3s ease;
+    }
+
+    .nav-links a:hover {
+        color: #f26e8c;
+    }
+
+    .content-wrapper {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+    }
+
+    /* --- Clean Profile Banner Header --- */
+    .banner-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        /* 1. INCREASE HEIGHT: Let's give the artwork 550px of space to shine */
+        height: 800px; 
+        z-index: 0; 
+        pointer-events: none;
+        
+        /* 2. SMOOTHER FADE: Start the fade slightly earlier (50%) for a softer blend */
+        -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
+        mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
+    }
+
+    .banner-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center 30%; 
+        opacity: 0.5; /* Allows sakura to show through */
+    }
+
+    /* --- Main Content Layout --- */
+    .portfolio-main {
+        max-width: 1200px;
+        margin: 0 auto;
+        
+        /* 3. PUSH TEXT DOWN: Since we added 150px to the banner, add it here too */
+        padding-top: 450px; 
+        padding-left: 2rem;
+        padding-right: 2rem;
+        padding-bottom: 80px; 
+        
+        position: relative; 
+        z-index: 10; 
+        
+        display: flex;
+        flex-direction: column;
+     
+        gap: 6rem; 
+    }
+    /* --- Profile About Header Styles --- */
+    .profile-header {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        text-align: left;
+    }
+
+    .profile-title-row {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    /* --- Profile Avatar Layering --- */
+    .avatar-container {
+        width: 110px;
+        height: 110px;
+        background: #d8daee;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        
+        /* Creates the cutout overlap effect against the banner art */
+        position: relative;
+        z-index: 2;
+        border-radius: 24px;
+        border: 4px solid #000000; /* Dark border to separate from the banner */
+    }
+
+    .avatar-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .avatar-placeholder {
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .profile-name {
+        font-family: serif, system-ui;
+        font-size: 3.2rem;
+        font-weight: 700;
+        color: #e5729f;
+        letter-spacing: -0.5px;
+        line-height: 1;
+    }
+
+    .profile-bio {
+        font-size: 1rem;
+        color: rgba(255, 255, 255, 0.85);
+        line-height: 1.6;
+        max-width: 1100px;
+    }
+
+    /* --- Section & Grid Layouts --- */
+    .portfolio-section {
+        width: 100%;
+        text-align: left;
+    }
+
+    .section-header {
+        font-size: 2.2rem;
+        font-weight: 700;
+        font-family: serif, system-ui;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+    }
+
+    .section-divider {
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 1.5rem;
+    }
+
+    .status-rows-container {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+        width: 100%;
+    }
+
+    /* --- ROW 1: Music & Games (2 Columns) --- */
+    .top-activity-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 1.5rem;
+        align-items: stretch;
+    }
+
+    /* --- NEW: Game Item Styling --- */
+    .games-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+    }
+
+    .game-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        background: rgba(0, 0, 0, 0.2);
+        padding: 0.5rem;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        transition: background 0.2s ease;
+    }
+
+    .game-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .game-image {
+        width: 55px;
+        height: 55px;
+        border-radius: 6px;
+        object-fit: cover;
+        flex-shrink: 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .game-info h4 {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.9);
+        margin-bottom: 0.1rem;
+    }
+
+    .game-info p {
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.6);
+        line-height: 1.3;
+    }
+
+    /* --- ROW 2: Projects --- */
+    .projects-row {
+        width: 100%;
+    }
+
+    .project-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-top: 0.5rem;
+    }
+
+    .project-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+
+    .project-item h4 {
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 600;
+        font-size: 1rem;
+    }
+
+    .status-box {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        backdrop-filter: blur(5px);
+    }
+
+    .status-box h3 {
+        font-size: 1.1rem;
+        font-family: serif, system-ui;
+        font-weight: 600;
+        color: #e5729f;
+        margin-bottom: 0.2rem;
+    }
+
+    .status-text {
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.7);
+        line-height: 1.5;
+    }
+
+
+    .spotify-widget-container {
+        border-radius: 12px;
+        overflow: hidden; 
+        display: flex;
+    }
+
+    .spotify-iframe {
+        border-radius: 12px;
+        width: 100%;
+        height: 100%;
+        min-height: 152px;
+    }
+    .podium-gold {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(234, 179, 8, 0.3);
+        box-shadow: 0 0 15px rgba(234, 179, 8, 0.1);
+    }
+    .text-gold { color: #facc15; }
+
+    .podium-silver {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(209, 213, 219, 0.3);
+        box-shadow: 0 0 15px rgba(209, 213, 219, 0.05);
+    }
+    .text-silver { color: #d1d5db; }
+
+    .podium-bronze {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(251, 146, 60, 0.3);
+        box-shadow: 0 0 15px rgba(251, 146, 60, 0.05);
+    }
+    .text-bronze { color: #fb923c; }
+
+    /* --- General Utilities --- */
+    .podium-row {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        padding: 1rem;
+        border-radius: 0.75rem;
+    }
+    .podium-number {
+        font-size: 3.75rem; /* 6xl */
+        font-weight: 700;
+        font-family: serif;
+        width: 4rem;
+        text-align: center;
+    }
+    .link-card {
+    display: flex; /* Forces Icon Side and Text Side to be side-by-side */
+    height: 80px;  /* Set a fixed height so they don't collapse */
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    overflow: hidden;
+    text-decoration: none;
+    transition: transform 0.2s ease;
+}
+/* ==========================================================================
+   PLAYLIST SECTION
+   ========================================================================== */
+.playlist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(285px, 2fr));
+    gap: 1.55rem; 
+    width: 100%;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.spotify-embed {
+    width: 100%;
+    height: 255px !important; /* INCREASED: Gives enough height to show the playlist tracks */
+    border-radius: 12px;
+   
+}
+/* Games Section */
+/* ==========================================================================
+   UNIVERSAL PAGE STRUCTURE (Use this on every page!)
+   ========================================================================== */
+.page-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    /* 150px top padding ensures NOTHING ever gets stuck under the navbar */
+    padding: 150px 2rem 4rem 2rem; 
+    min-height: 100vh;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.page-title {
+    text-align: center;
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 3rem; 
+    color: #e5729f; /* Your signature pink */
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ==========================================================================
+   GAMES SECTION
+   ========================================================================== */
+.games-grid {
+    display: grid;
+    /* REDUCED FROM 250px TO 200px: This makes the game art smaller */
+    grid-template-columns: repeat(auto-fit, 200px);
+    justify-content: center; 
+    gap: 2rem;
+    padding: 2rem 0;
+}
+
+.game-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    transition: transform 0.3s ease;
+}
+
+.game-card:hover {
+    transform: translateY(-5px);
+}
+
+.game-art {
+    width: 100%;
+    aspect-ratio: 2 / 3; /* Keeps the exact box art proportions */
+    object-fit: cover;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.game-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #ffffff;
+    text-align: center; /* Centers the text under the smaller art */
+}
+
+/* ==========================================================================
+   WORK / PROJECTS SECTION
+   ========================================================================== */
+.projects-grid {
+    display: grid;
+    /* Cards are at least 350px wide, and will stretch to fill available space */
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 2.5rem;
+}
+
+.project-card {
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    overflow: hidden; /* Keeps the image inside the rounded corners */
+    transition: transform 0.3s ease, border-color 0.3s ease;
+    text-decoration: none; /* In case you wrap them in <a> tags later */
+}
+
+.project-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.project-art {
+    width: 100%;
+    aspect-ratio: 16 / 9; /* Perfect widescreen ratio for project screenshots */
+    object-fit: cover;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.project-info {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.project-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.project-desc {
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+}
+
+.project-tags {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.tag {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    background: rgba(242, 110, 140, 0.1); /* Faint theme pink */
+    color: #f26e8c;
+    border-radius: 999px;
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   GALLERY COMPONENT STYLES
+   ========================================================================== */
+.gallery-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 900px;
+    height: 450px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* NO PADDING HERE! This stops the image from squishing */
+}
+
+.gallery-slide-window {
+    width: 100%;
+    height: 100%;
+    overflow: hidden; 
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.gallery-track {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); 
+}
+
+.gallery-slide {
+    min-width: 100%;
+    width: 100%;
+    height: 100%;
+}
+
+.gallery-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Glassmorphism Gallery Controls */
+.gallery-control-btn {
+    position: absolute;
+    z-index: 20;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(17, 20, 36, 0.6);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    font-size: 1.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.gallery-control-btn:hover {
+    background: #f26e8c; 
+    border-color: transparent;
+    transform: translateY(-50%) scale(1.1);
+}
+
+.gallery-control-btn.left { left: -25px; }
+.gallery-control-btn.right { right: -25px; }
+
+/* Slide Indicator Dots */
+.gallery-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.gallery-dots .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.3s ease;
+}
+
+.gallery-dots .dot.active {
+    background: #f26e8c;
+    transform: scale(1.2);
+}
+
+/* ==========================================================================
+   FOOTER SECTION
+   ========================================================================== */
+.site-footer {
+    width: 100%;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(17, 20, 36, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 2.5rem 0;
+    position: relative;
+    z-index: 100;
+    margin-top: auto; /* Pushes the footer to the bottom of the page */
+}
+
+.footer-content {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap; /* Allows it to stack on mobile phones */
+    gap: 1.5rem;
+}
+
+.footer-basics {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.footer-name {
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.footer-tagline {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.85rem;
+}
+
+.footer-socials {
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
+}
+
+.social-link {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1.25rem;
+    transition: color 0.3s ease, transform 0.3s ease;
+    display: flex;
+}
+
+.social-link:hover {
+    color: #f26e8c; /* Matches your signature pink */
+    transform: translateY(-3px);
+}
 }
