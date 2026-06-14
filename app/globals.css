@@ -48,7 +48,7 @@
         align-items: center;
         padding: 0 10%;
         z-index: 1000;
-        background: rgba(17, 20, 36, 0.65);
+        background: rgba(3, 3, 56, 0.65);
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -56,22 +56,22 @@
     }
 
     .nav-logo {
-        font-size: 1.5rem;
+        font-size: 2.0rem;
         font-weight: 700;
         letter-spacing: 1px;
         color: #ffd7e1; /* This is your signature pinkish-white color */
     }
 
-    /* --- ADD THIS NEW RULE --- */
     .nav-logo a {
         text-decoration: none; /* Removes the underline */
         color: inherit; /* Forces the link to use the #ffd7e1 color from above instead of the default purple */
     }
 
     .nav-links {
+        font-size: 1.5rem;
         display: flex;
         list-style: none;
-        gap: 2rem;
+        gap: 3.0rem;
     }
 
     .nav-links a {
@@ -98,7 +98,7 @@
         left: 0;
         width: 100%;
         /* 1. INCREASE HEIGHT: Let's give the artwork 550px of space to shine */
-        height: 800px; 
+        height: 550px; 
         z-index: 0; 
         pointer-events: none;
         
@@ -694,4 +694,45 @@
     color: #f26e8c; /* Matches your signature pink */
     transform: translateY(-3px);
 }
+}
+/* Mobile Design*/
+@media (max-width: 768px) {
+    .navbar {
+        padding: 0 10% !important; 
+    }
+
+    .nav-links {
+        gap: 1rem !important; 
+        font-size: 1rem !important;
+        display: flex;
+        list-style: none;
+       
+    }
+    .banner-container {
+        height: 500px; /* Shrinks the banner height so the browser doesn't have to zoom in as much */
+        width: 100%;
+    }
+    .banner-image {
+        /* 2. Control the camera! 
+           Change 'center' to 'left' or 'right' depending on where the best details are */
+        object-position: 75% center; 
+    }
+
+    .portfolio-main {
+        /* INCREASE THIS NUMBER: Try 220px to 250px. 
+           This pushes the avatar, name, and bio further down the screen. */
+        padding-top: 410px; 
+        
+        /* Optional: Reduces the massive gap between the bio and the games section on mobile */
+        
+    }
+    
+    
+    
+    .profile-bio {
+        border-left: none;
+        border-top: 2px solid #e5729f; /* Moves the accent line to the top for a centered layout */
+        border-radius: 8px;
+    }
+    
 }

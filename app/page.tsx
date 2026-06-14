@@ -9,7 +9,7 @@ export default function Home() {
 
       {/* --- NEW: The Background Banner Art --- */}
       <div className="banner-container">
-        <img src="/johto.png" alt="Profile Background Art" className="banner-image" />
+        <img src="/banner.png" alt="Profile Background Art" className="banner-image" />
       </div>
 
       {/* The rest of your site sits on top of the banner */}

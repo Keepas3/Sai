@@ -5,17 +5,21 @@ import Navbar from "@/components/Navbar";
 
 export default function GalleryPage() {
   const slides = [
-    { url: "https://picsum.photos/id/10/1200/600", title: "Artwork Log 01", desc: "Forest Wow" },
+    { url: "https://picsum.photos/id/10/1200/600", title: "Artwork Log 01", desc: "Forest is cool" },
     { url: "https://picsum.photos/id/29/1200/600", title: "Artwork Log 02", desc: "Me with the Boys." },
     { url: "https://picsum.photos/id/48/1200/600", title: "Artwork Log 03", desc: "Imagine Studying Computer Science." },
   ];
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  
+  // --- Mobile Swipe State Tracking ---
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchEndX, setTouchEndX] = useState<number | null>(null);
 
   const prevSlide = () => setCurrentIndex((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
   const nextSlide = () => setCurrentIndex((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
 
-  // --- NEW: Keyboard Navigation ---
+  // --- Keyboard Navigation (Desktop) ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") prevSlide();
@@ -23,7 +27,35 @@ export default function GalleryPage() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentIndex]); // Dependency ensures the latest index is used
+  }, [currentIndex]); 
+
+  // --- Mobile Swipe Logic ---
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.targetTouches[0].clientX);
+    setTouchEndX(null); 
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX === null || touchEndX === null) return;
+    
+    const distance = touchStartX - touchEndX;
+    const minSwipeDistance = 50; 
+
+    if (distance > minSwipeDistance) {
+      nextSlide();
+    }
+    
+    if (distance < -minSwipeDistance) {
+      prevSlide();
+    }
+
+    setTouchStartX(null);
+    setTouchEndX(null);
+  };
 
   return (
     <div className="content-wrapper">
@@ -33,11 +65,23 @@ export default function GalleryPage() {
         <h1 className="page-title">Gallery</h1>
 
         <div className="gallery-wrapper">
-          <button onClick={prevSlide} className="gallery-control-btn left" aria-label="Previous Slide">
+          
+          {/* --- LEFT BUTTON --- */}
+          <button 
+            onClick={prevSlide}
+            className="gallery-control-btn left" 
+            aria-label="Previous Slide"
+          >
             &#10094;
           </button>
 
-          <div className="gallery-slide-window">
+          {/* --- THE IMAGE WINDOW --- */}
+          <div 
+            className="gallery-slide-window"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
             <div 
               className="gallery-track"
               style={{ transform: `translateX(-${currentIndex * 100}%)` }}
@@ -50,7 +94,12 @@ export default function GalleryPage() {
             </div>
           </div>
 
-          <button onClick={nextSlide} className="gallery-control-btn right" aria-label="Next Slide">
+          {/* --- RIGHT BUTTON --- */}
+          <button 
+            onClick={nextSlide}
+            className="gallery-control-btn right" 
+            aria-label="Next Slide"
+          >
             &#10095;
           </button>
         </div>
@@ -68,7 +117,6 @@ export default function GalleryPage() {
               <span 
                 key={index} 
                 onClick={() => setCurrentIndex(index)}
-                // Added a cursor-pointer class for better UI feedback
                 className={`dot ${currentIndex === index ? 'active' : ''} cursor-pointer hover:bg-white/50 transition-all`}
               />
             ))}
