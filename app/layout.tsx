@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
-// If you kept the file name as sai.tsx, change the end of the line to /sai
+
 import SakuraCanvas from "@/components/sai";
 import Footer from '@/components/Footer' 
 
 export const metadata: Metadata = {
   title: "Sai",
-  description: "Built with Next.js and HTML5 Canvas",
+  description: "Read Umineko (also Mudkip is the GOAT)",
 };
 
 export default function RootLayout({

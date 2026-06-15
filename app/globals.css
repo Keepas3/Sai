@@ -57,7 +57,7 @@
     }
 
     .nav-logo {
-        font-size: 1.5rem;
+        font-size: 1.75rem;
         font-weight: 700;
         letter-spacing: 1px;
         color: #ffd7e1; /* This is your signature pinkish-white color */
@@ -69,7 +69,7 @@
     }
 
     .nav-links {
-        font-size: 1.5rem;
+        font-size: 1.4rem;
         display: flex;
         list-style: none;
         gap: 3.0rem;
