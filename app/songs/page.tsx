@@ -1,94 +1,155 @@
 import Navbar from "@/components/Navbar";
+import { client } from '@/sanity/lib/client';
 
-export default function PlaylistPage() {
-    return (
-        <div className="content-wrapper">
-            <Navbar />
+export const revalidate = 0;
 
-            <main className="page-container">
-                
-                {/* --- Page Header --- */}
-                <header className="flex flex-col gap-4 text-left">
-                    <h1 className="page-title">Songs</h1>
-                </header>
+interface SanitySong {
+  title: string;
+  artist: string;
+  spotifyTrackUrl?: string;
+}
 
-                <hr className="border-t border-white/10 mb-8" />
+interface PlaylistTopic {
+  topicName: string;
+  topicDescription?: string;
+  urls?: string[];
+}
 
-                {/* =========================================
-                    TOP 3 SONGS SECTION
-                ========================================= */}
-                <section className="flex flex-col gap-8">
-                    <h2 className="text-3xl font-bold font-serif text-white/90">My Top 3 Songs</h2>
-                    
-                    <div className="flex flex-col gap-4">
-                        
-                        {/* #1 - GOLD */}
-                        <div className="podium-row podium-gold">
-                            <div className="podium-number text-gold">1</div>
-                            <div className="flex-1">
-                                <iframe src="https://open.spotify.com/embed/track/3Ld9NGGKYwOyZvd1bPF0ZE?si=a0e60b2c743f4b2e" width="100%" height="152" frameBorder="0" allow="encrypted-media" className="rounded-lg"></iframe>
-                            </div>
-                        </div>
+interface MusicPageData {
+  pageTitle: string;
+  topSongs?: SanitySong[];
+  playlistTopics?: PlaylistTopic[];
+}
 
-                        {/* #2 - SILVER */}
-                        <div className="podium-row podium-silver">
-                            <div className="podium-number text-silver">2</div>
-                            <div className="flex-1">
-                                <iframe src="https://open.spotify.com/embed/track/06DHZv4ahSwp30plm1kbgM?si=f0e0b5733f7b4e64" width="100%" height="152" frameBorder="0" allow="encrypted-media" className="rounded-lg"></iframe>
-                            </div>
-                        </div>
+function convertToSpotifyEmbed(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    if (url.includes('/embed/')) return url;
+    if (url.includes('open.spotify.com/track/')) {
+      return url.replace('open.spotify.com/track/', 'open.spotify.com/embed/track/');
+    }
+    if (url.includes('open.spotify.com/playlist/')) {
+      return url.replace('open.spotify.com/playlist/', 'open.spotify.com/embed/playlist/');
+    }
+    return url;
+  } catch (e) {
+    return null;
+  }
+}
 
-                        {/* #3 - BRONZE */}
-                        <div className="podium-row podium-bronze">
-                            <div className="podium-number text-bronze">3</div>
-                            <div className="flex-1">
-                                <iframe src="https://open.spotify.com/embed/track/50X6x4TgZPPX135DjCPIJW?si=6d9c3c01f78a4d26" width="100%" height="152" frameBorder="0" allow="encrypted-media" className="rounded-lg"></iframe>
-                            </div>
-                        </div>
+export default async function PlaylistPage() {
+  const musicData: MusicPageData | null = await client.fetch(`
+    *[_type == "musicPage"][0] {
+      pageTitle,
+      topSongs,
+      playlistTopics
+    }
+  `);
 
+  const pageTitle = musicData?.pageTitle || "Songs";
+  const activeSongs = musicData?.topSongs?.filter(song => song.spotifyTrackUrl) || [];
+  const topics = musicData?.playlistTopics || [];
+
+  return (
+    <div className="content-wrapper">
+      <Navbar />
+
+      <main className="page-container">
+        
+        {/* --- Page Header --- */}
+        <header className="flex flex-col gap-4 text-left">
+          <h1 className="page-title">{pageTitle}</h1>
+        </header>
+
+        <hr className="border-t border-white/10 mb-8" />
+
+        {/* =========================================
+            TOP tracks SECTION
+        ========================================= */}
+        {activeSongs.length > 0 && (
+          <section className="flex flex-col gap-8">
+            <h2 className="text-3xl font-bold font-serif text-white/90">My Top Tracks</h2>
+            
+            <div className="flex flex-col gap-4">
+              {activeSongs.map((song, index) => {
+                const embedSrc = convertToSpotifyEmbed(song.spotifyTrackUrl);
+                if (!embedSrc) return null;
+
+                const podiumClasses = ["podium-gold", "podium-silver", "podium-bronze"];
+                const numberClasses = ["text-gold", "text-silver", "text-bronze"];
+
+                return (
+                  <div key={index} className={`podium-row ${podiumClasses[index] || ""}`}>
+                    <div className={`podium-number ${numberClasses[index] || ""}`}>{index + 1}</div>
+                    <div className="flex-1">
+                      <iframe 
+                        src={embedSrc}
+                        width="100%" 
+                        height="152" 
+                        frameBorder="0" 
+                        allow="encrypted-media" 
+                        className="rounded-lg"
+                        loading="lazy"
+                      ></iframe>
                     </div>
-                </section>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
-                {/* =========================================
-                    MOOD 1: Architecture
-                ========================================= */}
-                <section className="flex flex-col gap-8 mt-16">
-                    
-                    <div className="flex flex-col gap-2">
-                        <h2 className="text-2xl font-bold font-serif text-white/90 border-b border-white/10 pb-2">Playlist for Architecture</h2>
-                        <p className="text-white/60 text-sm mb-6">Oriental-inspired or lofi tracks.</p>
-                    </div>
+        {/* =========================================
+            DYNAMIC MULTI-TOPIC PLAYLISTS
+        ========================================= */}
+        {topics.map((topic, topicIdx) => {
+          const activeUrls = topic.urls?.filter(Boolean) || [];
+          if (activeUrls.length === 0) return null;
 
-                    {/* Replaced Tailwind grid with .playlist-grid */}
-                    <div className="playlist-grid">
-                        {/* Replaced Tailwind classes with .spotify-embed */}
-                        <iframe src="https://open.spotify.com/embed/playlist/6f3PZbS8F2Uy8t5rObDRvI?si=PZspFO-6RYaPw2f5EyYAtQ" frameBorder="0" allowFullScreen loading="lazy" className="spotify-embed"></iframe>
-                        <iframe src="https://open.spotify.com/embed/playlist/6f3PZbS8F2Uy8t5rObDRvI?si=PZspFO-6RYaPw2f5EyYAtQ" frameBorder="0" allowFullScreen loading="lazy" className="spotify-embed"></iframe>
-                        <iframe src="https://open.spotify.com/embed/playlist/6f3PZbS8F2Uy8t5rObDRvI?si=PZspFO-6RYaPw2f5EyYAtQ" frameBorder="0" allowFullScreen loading="lazy" className="spotify-embed"></iframe>
-                    </div>
+          return (
+            <section key={topicIdx} className="flex flex-col gap-8 mt-16">
+              
+              {/* Header Context for each unique topic */}
+              <div className="flex flex-col gap-2">
+                <h2 className="text-2xl font-bold font-serif text-white/90 border-b border-white/10 pb-2">
+                  {topic.topicName}
+                </h2>
+                {topic.topicDescription && (
+                  <p className="text-white/60 text-sm mb-6">{topic.topicDescription}</p>
+                )}
+              </div>
 
-                </section>
+              {/* Your native CSS .playlist-grid will now map unique items side-by-side */}
+              <div className="playlist-grid">
+                {activeUrls.map((url, urlIdx) => {
+                  const embedSrc = convertToSpotifyEmbed(url);
+                  if (!embedSrc) return null;
 
-                {/* =========================================
-                    MOOD 2: High Energy & Tactics
-                ========================================= */}
-                <section className="flex flex-col gap-8 mt-16">
-                    
-                    <div className="flex flex-col gap-2">
-                        <h2 className="text-2xl font-bold font-serif text-white/90 border-b border-white/10 pb-2">Video Game Soundtracks / Anime Style</h2>
-                        <p className="text-white/60 text-sm mb-6">Music from games or anime-style compositions.</p>
-                    </div>
+                  return (
+                    <iframe 
+                      key={urlIdx}
+                      src={embedSrc} 
+                      frameBorder="0" 
+                      allowFullScreen 
+                      loading="lazy" 
+                      className="spotify-embed"
+                    ></iframe>
+                  );
+                })}
+              </div>
 
-                    <div className="playlist-grid">
-                        {/* */}
-                        <iframe src="https://open.spotify.com/embed/playlist/2mIgGNvWhF6f45XIBWNWx7" frameBorder="0" allowFullScreen loading="lazy" className="spotify-embed"></iframe>
-                        <iframe src="https://open.spotify.com/embed/playlist/2mIgGNvWhF6f45XIBWNWx7" frameBorder="0" allowFullScreen loading="lazy" className="spotify-embed"></iframe>
-                        <iframe src="https://open.spotify.com/embed/playlist/2mIgGNvWhF6f45XIBWNWx7" frameBorder="0" allowFullScreen loading="lazy" className="spotify-embed"></iframe>
-                    </div>
+            </section>
+          );
+        })}
 
-                </section>
+        {/* Fallback layout if everything is unconfigured */}
+        {activeSongs.length === 0 && topics.length === 0 && (
+          <div className="text-center mt-12">
+            <h2 className="text-white/40 text-lg font-mono">No music sections published yet.</h2>
+          </div>
+        )}
 
-            </main>
-        </div>
-    );
+      </main>
+    </div>
+  );
 }

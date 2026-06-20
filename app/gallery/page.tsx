@@ -2,19 +2,47 @@
 
 import React, { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
+import { client } from '@/sanity/lib/client';
+
+// 1. Define what a slide looks like for TypeScript
+interface Slide {
+  title: string;
+  description: string;
+  url: string;
+}
 
 export default function GalleryPage() {
-  const slides = [
-    { url: "https://picsum.photos/id/10/1200/600", title: "Artwork Log 01", desc: "Forest is cool" },
-    { url: "https://picsum.photos/id/29/1200/600", title: "Artwork Log 02", desc: "Me with the Boys." },
-    { url: "https://picsum.photos/id/48/1200/600", title: "Artwork Log 03", desc: "Imagine Studying Computer Science." },
-  ];
-
+  // 2. Set up state for your Sanity data and a loading screen
+  const [slides, setSlides] = useState<Slide[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
   const [currentIndex, setCurrentIndex] = useState(0);
   
   // --- Mobile Swipe State Tracking ---
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchEndX, setTouchEndX] = useState<number | null>(null);
+
+  // 3. Fetch data from Sanity when the page loads
+  useEffect(() => {
+    const fetchGalleryData = async () => {
+      try {
+        const data = await client.fetch(`
+          *[_type == "gallerySlide"] {
+            title,
+            description,
+            "url": image.asset->url
+          }
+        `);
+        setSlides(data);
+      } catch (error) {
+        console.error("Failed to fetch gallery data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchGalleryData();
+  }, []);
 
   const prevSlide = () => setCurrentIndex((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
   const nextSlide = () => setCurrentIndex((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
@@ -27,7 +55,7 @@ export default function GalleryPage() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentIndex]); 
+  }, [currentIndex, slides.length]); // Added slides.length as a dependency
 
   // --- Mobile Swipe Logic ---
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -45,17 +73,36 @@ export default function GalleryPage() {
     const distance = touchStartX - touchEndX;
     const minSwipeDistance = 50; 
 
-    if (distance > minSwipeDistance) {
-      nextSlide();
-    }
-    
-    if (distance < -minSwipeDistance) {
-      prevSlide();
-    }
+    if (distance > minSwipeDistance) nextSlide();
+    if (distance < -minSwipeDistance) prevSlide();
 
     setTouchStartX(null);
     setTouchEndX(null);
   };
+
+  // 4. Show a loading state while fetching from Sanity
+  if (isLoading) {
+    return (
+      <div className="content-wrapper">
+        <Navbar />
+        <main className="page-container flex items-center justify-center">
+          <h2 className="text-white text-2xl font-serif">Loading Artwork...</h2>
+        </main>
+      </div>
+    );
+  }
+
+  // 5. If no slides exist in the database, show a friendly message
+  if (slides.length === 0) {
+    return (
+      <div className="content-wrapper">
+        <Navbar />
+        <main className="page-container flex items-center justify-center">
+          <h2 className="text-white text-2xl font-serif">No pictures found. Add some in Sanity Studio!</h2>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="content-wrapper">
@@ -106,10 +153,11 @@ export default function GalleryPage() {
 
         <div className="gallery-meta text-center mt-6">
           <h2 className="text-2xl font-bold font-serif text-white/90">
-            {slides[currentIndex].title}
+            {slides[currentIndex]?.title}
           </h2>
           <p className="text-white/60 text-sm mt-2">
-            {slides[currentIndex].desc}
+            {/* Note: Changed this from slide.desc to slide.description to match your Sanity schema! */}
+            {slides[currentIndex]?.description} 
           </p>
           
           <div className="gallery-dots mt-4">
