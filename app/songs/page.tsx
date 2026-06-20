@@ -21,20 +21,38 @@ interface MusicPageData {
   playlistTopics?: PlaylistTopic[];
 }
 
-function convertToSpotifyEmbed(url: string | undefined): string | null {
+function resolveEmbedUrl(url: string | undefined): string | null {
   if (!url) return null;
-  try {
-    if (url.includes('/embed/')) return url;
-    if (url.includes('open.spotify.com/track/')) {
-      return url.replace('open.spotify.com/track/', 'open.spotify.com/embed/track/');
+  const cleanUrl = url.trim();
+
+  if (cleanUrl.includes('spotify.com')) {
+    if (cleanUrl.includes('/embed/')) return cleanUrl;
+    const spotifyMatches = cleanUrl.match(/spotify\.com\/(playlist|album|track)\/([a-zA-Z0-9]+)/);
+    if (spotifyMatches) {
+      return `https://open.spotify.com/embed/${spotifyMatches[1]}/${spotifyMatches[2]}`;
     }
-    if (url.includes('open.spotify.com/playlist/')) {
-      return url.replace('open.spotify.com/playlist/', 'open.spotify.com/embed/playlist/');
-    }
-    return url;
-  } catch (e) {
-    return null;
   }
+
+  if (cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be')) {
+    if (cleanUrl.includes('/embed/')) return cleanUrl;
+    if (cleanUrl.includes('list=')) {
+      const playlistMatches = cleanUrl.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+      if (playlistMatches) {
+        return `https://www.youtube.com/embed/videoseries?list=${playlistMatches[1]}`;
+      }
+    }
+    let videoId = '';
+    if (cleanUrl.includes('youtu.be/')) {
+      videoId = cleanUrl.split('youtu.be/')[1]?.split(/[?#]/)[0];
+    } else {
+      const videoMatches = cleanUrl.match(/[?&]v=([a-zA-Z0-9_-]+)/);
+      videoId = videoMatches ? videoMatches[1] : '';
+    }
+    if (videoId) {
+      return `https://www.youtube.com/embed/${videoId}`;
+    }
+  }
+  return cleanUrl;
 }
 
 export default async function PlaylistPage() {
@@ -64,15 +82,16 @@ export default async function PlaylistPage() {
         <hr className="border-t border-white/10 mb-8" />
 
         {/* =========================================
-            TOP tracks SECTION
+            TOP TRACKS SECTION
         ========================================= */}
         {activeSongs.length > 0 && (
-          <section className="flex flex-col gap-8">
+          // Inline style forces a clean 80px space between top tracks and playlist topics
+          <section className="flex flex-col gap-6" style={{ marginBottom: '80px' }}>
             <h2 className="text-3xl font-bold font-serif text-white/90">My Top Tracks</h2>
             
             <div className="flex flex-col gap-4">
               {activeSongs.map((song, index) => {
-                const embedSrc = convertToSpotifyEmbed(song.spotifyTrackUrl);
+                const embedSrc = resolveEmbedUrl(song.spotifyTrackUrl);
                 if (!embedSrc) return null;
 
                 const podiumClasses = ["podium-gold", "podium-silver", "podium-bronze"];
@@ -85,11 +104,14 @@ export default async function PlaylistPage() {
                       <iframe 
                         src={embedSrc}
                         width="100%" 
+                        // FIXED: All tracks locked back to 152 to match sizes perfectly
                         height="152" 
                         frameBorder="0" 
-                        allow="encrypted-media" 
-                        className="rounded-lg"
+                        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+                        className="rounded-lg shadow-md"
                         loading="lazy"
+                        allowFullScreen
+                        title={`Top Song ${index + 1}`}
                       ></iframe>
                     </div>
                   </div>
@@ -107,32 +129,38 @@ export default async function PlaylistPage() {
           if (activeUrls.length === 0) return null;
 
           return (
-            <section key={topicIdx} className="flex flex-col gap-8 mt-16">
+            // FIXED: Reduced margin-top down to 40px to lessen the spacing between sequential topics
+            <section key={topicIdx} className="flex flex-col" style={{ marginTop: '20px' }}>
               
-              {/* Header Context for each unique topic */}
-              <div className="flex flex-col gap-2">
+              {/* Header Context */}
+              <div className="flex flex-col">
                 <h2 className="text-2xl font-bold font-serif text-white/90 border-b border-white/10 pb-2">
                   {topic.topicName}
                 </h2>
                 {topic.topicDescription && (
-                  <p className="text-white/60 text-sm mb-6">{topic.topicDescription}</p>
+                  <p className="text-white/60 text-sm mt-2">{topic.topicDescription}</p>
                 )}
               </div>
 
-              {/* Your native CSS .playlist-grid will now map unique items side-by-side */}
-              <div className="playlist-grid">
+              {/* FIXED: Forces an exact clean text space gap directly underneath the description lines */}
+              <div className="playlist-grid" style={{ marginTop: '10px' }}>
                 {activeUrls.map((url, urlIdx) => {
-                  const embedSrc = convertToSpotifyEmbed(url);
+                  const embedSrc = resolveEmbedUrl(url);
                   if (!embedSrc) return null;
+
+                  const isYouTubePlaylist = embedSrc.includes('videoseries');
 
                   return (
                     <iframe 
                       key={urlIdx}
                       src={embedSrc} 
                       frameBorder="0" 
+                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
                       allowFullScreen 
                       loading="lazy" 
                       className="spotify-embed"
+                      style={{ height: isYouTubePlaylist ? '360px' : '255px' }}
+                      title={`Embed Stream ${topicIdx}-${urlIdx}`}
                     ></iframe>
                   );
                 })}
@@ -142,7 +170,7 @@ export default async function PlaylistPage() {
           );
         })}
 
-        {/* Fallback layout if everything is unconfigured */}
+        {/* Fallback layout */}
         {activeSongs.length === 0 && topics.length === 0 && (
           <div className="text-center mt-12">
             <h2 className="text-white/40 text-lg font-mono">No music sections published yet.</h2>

@@ -35,7 +35,7 @@ export default {
       type: 'array',
       title: 'Playlist Topics / Moods',
       description: 'Create custom music sections (e.g., Lofi, High Energy). You can add up to 3 topics.',
-      validation: (Rule: any) => Rule.max(3).error('You can feature up to 3 different playlist topics!'),
+      validation: (Rule: any) => Rule.max(6).error('You can feature up to 6 different playlist topics!'),
       of: [
         {
           type: 'object',
@@ -57,8 +57,8 @@ export default {
             {
               name: 'urls',
               type: 'array',
-              title: 'Spotify Playlist Links',
-              description: 'Paste up to 3 different Spotify playlist URLs under this topic.',
+              title: 'Playlist Links',
+              description: 'Paste up to 3 different playlist URLs under this topic.',
               validation: (Rule: any) => Rule.max(3).error('Up to 3 playlists per topic.'),
               of: [{ type: 'url' }]
             }

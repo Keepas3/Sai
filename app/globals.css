@@ -404,7 +404,7 @@
 .spotify-embed {
     width: 100%;
     height: 255px !important; /* INCREASED: Gives enough height to show the playlist tracks */
-    border-radius: 12px;
+    
    
 }
 /* Games Section */
