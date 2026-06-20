@@ -25,7 +25,6 @@ export default {
       name: 'status',
       type: 'string',
       title: 'Playing Status',
-      type: 'string',
       options: {
         list: [
           { title: 'Currently Playing', value: 'playing' },
