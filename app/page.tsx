@@ -2,6 +2,10 @@ import Navbar from "@/components/Navbar";
 import SpotifyStatus from "@/components/SpotifyStatus"; 
 import { client } from '@/sanity/lib/client';
 
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface ProfileData {
   name: string;
   bio: string;
@@ -23,29 +27,32 @@ interface DashboardGame {
   imageUrl?: string;
 }
 
-export const revalidate = 0;
-
 export default async function Home() {
+  // FIXED FOR LIVE DEPLOYMENT: Added { cache: 'no-store' } as the third parameter.
+  // This blocks Next.js from intercepting the request and forces a clean network fetch.
   const data = await client.fetch(`{
-    "profile": *[_type == "profile"][0] {
+    "profile": *[_type == "profile"] | order(_updatedAt desc)[0] {
       name,
       bio,
       "avatarUrl": avatar.asset->url,
       "bannerUrl": banner.asset->url
     },
-    "projects": *[_type == "project"] | order(_updatedAt desc)[0..0] {
+    // 1. Follows your custom homepage project drag-and-drop list order
+    "projects": *[_type == "profile"] | order(_updatedAt desc)[0].featuredProjects[]-> {
       _id,
       title,
       description,
       projectLink,
       "imageUrl": image.asset->url
     },
-    "games": *[_type == "game"] | order(_updatedAt desc)[0..1] {
+    // 2. Follows your custom homepage games drag-and-drop list order
+    "games": *[_type == "profile"] | order(_updatedAt desc)[0].featuredGames[]-> {
       _id,
       title,
       "imageUrl": coverImage.asset->url
-    }
-  }`);
+    },
+    
+  }`, {}, { cache: 'no-store' });
 
   const profile: ProfileData | null = data.profile;
   const projects: DashboardProject[] = data.projects || [];
@@ -90,7 +97,6 @@ export default async function Home() {
         </div>
 
         {/* --- DASHBOARD STYLED ELEMENT GRIDS --- */}
-      {/* --- DASHBOARD STYLED ELEMENT GRIDS --- */}
         <div className="status-rows-container mt-16">
           
           {/* ROW 1: Spotify & Games Collection */}
@@ -119,7 +125,6 @@ export default async function Home() {
                 ) : (
                   games.map((game) => (
                     <div key={game._id} className="game-item">
-                      {/* FIXED: Removed 'border border-white/10' to eliminate the white ring */}
                       <div className="w-[55px] h-[55px] rounded-md overflow-hidden flex items-center justify-center bg-white/5 shrink-0">
                         {game.imageUrl ? (
                           <img 
@@ -163,7 +168,6 @@ export default async function Home() {
                       </div>
                     )}
                     
-                    {/* FIXED: Using a standard anchor link tag styled to match your layout accent color */}
                     <h4>
                       {activeProject.projectLink ? (
                         <a 

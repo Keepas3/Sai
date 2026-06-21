@@ -24,7 +24,7 @@ export const structure: StructureResolver = (S) =>
 
       // 3. Games
       S.listItem()
-        .title('Games Collection')
+        .title('Games')
         .schemaType('game')
         .child(S.documentTypeList('game').title('Games')),
 

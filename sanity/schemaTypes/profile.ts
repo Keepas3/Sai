@@ -7,29 +7,40 @@ export default {
       name: 'name',
       title: 'Display Name',
       type: 'string',
-      description: 'Your name as it appears on the homepage',
     },
     {
       name: 'bio',
       title: 'Biography / Tagline',
       type: 'text',
-      description: 'The short phrase or quote under your name',
     },
     {
       name: 'avatar',
       title: 'Profile Avatar',
       type: 'image',
-      options: {
-        hotspot: true, // Allows you to crop the image inside Sanity
-      },
+      options: { hotspot: true },
     },
     {
       name: 'banner',
       title: 'Background Banner',
       type: 'image',
-      options: {
-        hotspot: true,
-      },
+      options: { hotspot: true },
     },
+    // --- THIS ENABLES DRAG & DROP FOR PROJECTS ---
+    {
+      name: 'featuredProjects',
+      type: 'array',
+      title: 'Featured Dashboard Projects',
+      description: 'Select and drag-and-drop order your projects.',
+      of: [{ type: 'reference', to: [{ type: 'project' }] }]
+    },
+    // --- THIS ENABLES DRAG & DROP FOR GAMES ---
+    {
+      name: 'featuredGames',
+      type: 'array',
+      title: 'Featured Dashboard Games',
+      description: 'Select and drag-and-drop order your games.',
+      of: [{ type: 'reference', to: [{ type: 'game' }] }]
+    },
+   
   ],
 };
