@@ -2,7 +2,6 @@ import Navbar from "@/components/Navbar";
 import SpotifyStatus from "@/components/SpotifyStatus"; 
 import { client } from '@/sanity/lib/client';
 
-
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
@@ -14,7 +13,6 @@ interface ProfileData {
 }
 
 interface DashboardProject {
-  _id: string;
   title: string;
   description: string;
   projectLink?: string;
@@ -22,14 +20,12 @@ interface DashboardProject {
 }
 
 interface DashboardGame {
-  _id: string;
   title: string;
   imageUrl?: string;
 }
 
 export default async function Home() {
-  // FIXED FOR LIVE DEPLOYMENT: Added { cache: 'no-store' } as the third parameter.
-  // This blocks Next.js from intercepting the request and forces a clean network fetch.
+  // 1. Fetch data from Sanity
   const data = await client.fetch(`{
     "profile": *[_type == "profile"] | order(_updatedAt desc)[0] {
       name,
@@ -37,26 +33,27 @@ export default async function Home() {
       "avatarUrl": avatar.asset->url,
       "bannerUrl": banner.asset->url
     },
-    // 1. Follows your custom homepage project drag-and-drop list order
-    "projects": *[_type == "profile"] | order(_updatedAt desc)[0].featuredProjects[]-> {
-      _id,
-      title,
-      description,
-      projectLink,
-      "imageUrl": image.asset->url
+    "projectsData": *[_type == "project" && defined(projectList)] | order(_updatedAt desc)[0] {
+      projectList[] {
+        title,
+        description,
+        projectLink,
+        "imageUrl": image.asset->url
+      }
     },
-    // 2. Follows your custom homepage games drag-and-drop list order
-    "games": *[_type == "profile"] | order(_updatedAt desc)[0].featuredGames[]-> {
-      _id,
-      title,
-      "imageUrl": coverImage.asset->url
-    },
-    
+    // FIXED: Added [0..4] to truncate the array directly within the database query layer
+    "gamesData": *[_type == "game" && defined(gamesList)] | order(_updatedAt desc)[0] {
+      "gamesList": gamesList[0..4] {
+        title,
+        "imageUrl": coverImage.asset->url
+      }
+    }
   }`, {}, { cache: 'no-store' });
 
   const profile: ProfileData | null = data.profile;
-  const projects: DashboardProject[] = data.projects || [];
-  const games: DashboardGame[] = data.games || [];
+  
+  const projects: DashboardProject[] = data.projectsData?.projectList || [];
+  const games: DashboardGame[] = data.gamesData?.gamesList || [];
   
   const activeProject = projects[0];
 
@@ -123,8 +120,8 @@ export default async function Home() {
                 {games.length === 0 ? (
                   <p className="status-text italic">No games logged.</p>
                 ) : (
-                  games.map((game) => (
-                    <div key={game._id} className="game-item">
+                  games.map((game, index) => (
+                    <div key={index} className="game-item">
                       <div className="w-[55px] h-[55px] rounded-md overflow-hidden flex items-center justify-center bg-white/5 shrink-0">
                         {game.imageUrl ? (
                           <img 

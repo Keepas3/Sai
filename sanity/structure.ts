@@ -38,6 +38,6 @@ export const structure: StructureResolver = (S) =>
       // 5. Gallery
       S.listItem()
         .title('Visual Gallery')
-        .schemaType('gallerySlide')
-        .child(S.documentTypeList('gallerySlide').title('Gallery Images')),
+        .schemaType('galleryPageContent')
+        .child(S.documentTypeList('galleryPageContent').title('Gallery Images')),
     ])

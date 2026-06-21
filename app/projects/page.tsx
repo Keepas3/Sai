@@ -3,7 +3,6 @@ import { client } from '@/sanity/lib/client';
 
 // 1. Define the TypeScript type matching our updated schema
 interface Project {
-  _id: string;
   title: string;
   description: string;
   imageUrl?: string;
@@ -12,24 +11,30 @@ interface Project {
 }
 
 export default async function WorkPage() {
-  // 2. Fetch live data from Sanity
-  const projects: Project[] = await client.fetch(`
-    *[_type == "project"] {
-      _id,
-      title,
-      description,
-      "imageUrl": image.asset->url,
-      projectLink,
-      category
+  // 2. Fetch live data from Sanity matching the array structure
+  const data = await client.fetch(`
+    *[_type == "project" && defined(projectList)] | order(_updatedAt desc)[0] {
+      pageTitle,
+      projectList[] {
+        title,
+        description,
+        projectLink,
+        category,
+        "imageUrl": image.asset->url
+      }
     }
-  `);
+  `, {}, { cache: 'no-store' });
+
+  const sectionTitle = data?.pageTitle || "Work & Projects";
+  const projects: Project[] = data?.projectList || [];
 
   return (
     <div className="content-wrapper">
       <Navbar />
 
       <main className="page-container">
-        <h1 className="page-title">Work & Projects</h1>
+        {/* Dynamic header title tracking from Sanity */}
+        <h1 className="page-title">{sectionTitle}</h1>
         
         {projects.length === 0 ? (
           <div className="text-center mt-12">
@@ -37,7 +42,7 @@ export default async function WorkPage() {
           </div>
         ) : (
           <div className="projects-grid">
-            {projects.map((project) => {
+            {projects.map((project, index) => {
               
               // Image Fallback Logic
               const displayImage = project.imageUrl 
@@ -52,14 +57,14 @@ export default async function WorkPage() {
                 href: project.projectLink,
                 target: "_blank",
                 rel: "noopener noreferrer",
-                // Added 'group' and 'cursor-pointer' so we can trigger hover effects on the text when hovering over the image
                 className: "project-card block cursor-pointer group transition-transform hover:-translate-y-1"
               } : {
                 className: "project-card block"
               };
 
               return (
-                <CardWrapper key={project._id} {...wrapperProps}>
+                /* FIXED: Replaced project._id with index loop key */
+                <CardWrapper key={index} {...wrapperProps}>
                   
                   {/* Image Box */}
                   {displayImage ? (
@@ -80,7 +85,7 @@ export default async function WorkPage() {
                       </span>
                     )}
 
-                    {/* Title (Removed <a> tag, added group-hover text color change) */}
+                    {/* Title */}
                     <h3 className="project-title flex items-center gap-1 group-hover:text-white/70 transition-colors">
                       {project.title} 
                       {project.projectLink && <span className="text-xs text-white/30">↗</span>}
@@ -88,7 +93,7 @@ export default async function WorkPage() {
 
                     <p className="project-desc">{project.description}</p>
                     
-                    {/* Button (Removed <a> tag, changed to a styled span) */}
+                    {/* Button */}
                     {project.projectLink && (
                       <div className="mt-4">
                         <span className="text-xs text-white/80 bg-white/10 border border-white/20 px-3 py-1.5 rounded-md group-hover:bg-white/20 transition-all font-mono inline-block">

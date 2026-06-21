@@ -23,17 +23,20 @@ export default function GalleryPage() {
   const [touchEndX, setTouchEndX] = useState<number | null>(null);
 
   // 3. Fetch data from Sanity when the page loads
-  useEffect(() => {
+  // 3. Fetch data from Sanity matching your custom drag-and-drop panel sequence
+ useEffect(() => {
     const fetchGalleryData = async () => {
       try {
+        // Fetches your single layout page container document, grabbing its slides array
         const data = await client.fetch(`
-          *[_type == "gallerySlide"] {
+          *[_type == "galleryPageContent"] | order(_updatedAt desc)[0].slides[] {
             title,
             description,
             "url": image.asset->url
           }
         `);
-        setSlides(data);
+        
+        setSlides(data || []);
       } catch (error) {
         console.error("Failed to fetch gallery data:", error);
       } finally {
