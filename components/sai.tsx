@@ -11,51 +11,49 @@ export default function SakuraCanvas() {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // --- MULTIPLE SAKURA IMAGES ---
-        // Add more sakura image paths here. Each petal will randomly select one.
-        const sakuraImagePaths = ['/sakura.png', '/sakura2.png'];
-        const petalImages: HTMLImageElement[] = [];
-        let loadedImageCount = 0;
+        // --- 1. SAKURA ASSETS & RATIO LAYOUT CONFIGS ---
+        const regularPaths = ['/sakura.png', '/sakura2.png'];
+        const rarePath = '/reimu.png'; // 
+        const rareProbability = 0.02;       // ◄ 0.5 = 50% chance to spawn this asset
 
-        // Load all sakura images
-        sakuraImagePaths.forEach((path) => {
+        const regularImages: HTMLImageElement[] = [];
+        let rareImage: HTMLImageElement | null = null;
+        let loadedImageCount = 0;
+        const totalImagesToLoad = regularPaths.length + 1;
+
+        // Preload standard uniform items
+        regularPaths.forEach((path) => {
             const img = new Image();
             img.src = path;
-            img.onload = () => {
-                loadedImageCount++;
-            };
-            img.onerror = () => {
-                console.error(`Failed to load image: ${path}`);
-            };
-            petalImages.push(img);
+            img.onload = () => loadedImageCount++;
+            img.onerror = () => console.error(`Failed loading layout path: ${path}`);
+            regularImages.push(img);
         });
+
+        // Preload rare asset node item
+        rareImage = new Image();
+        rareImage.src = rarePath;
+        rareImage.onload = () => loadedImageCount++;
+        rareImage.onerror = () => console.error(`Failed loading rare layout path: ${rarePath}`);
 
         let animationFrameId: number;
         const petalsArray: any[] = [];
         const maxPetals = 30; 
 
-        // --- 1. VIEWPORT TRACKING ---
-        // We track the logical size of the window separately from the physical canvas pixels
+        // --- VIEWPORT & RESOLUTION TRACKING ---
         let logicalWidth = window.innerWidth;
         let logicalHeight = window.innerHeight;
 
-        // --- 2. HIGH-DPI RESOLUTION SCALING ---
         const resizeCanvas = () => {
             logicalWidth = window.innerWidth;
             logicalHeight = window.innerHeight;
-            
-            // Get the display's pixel density (Retina screens = 2 or 3)
             const dpr = window.devicePixelRatio || 1;
             
-            // Set the massive internal rendering resolution (for crisp image quality)
             canvas.width = logicalWidth * dpr;
             canvas.height = logicalHeight * dpr;
-            
-            // Lock the visual CSS size to match the exact browser window
             canvas.style.width = `${logicalWidth}px`;
             canvas.style.height = `${logicalHeight}px`;
             
-            // Normalize the coordinate system so our falling math works consistently
             ctx.scale(dpr, dpr);
         };
         
@@ -73,18 +71,17 @@ export default function SakuraCanvas() {
             }
 
             init(isFirstLoad = false) {
-                // Randomly select one of the sakura images
-                this.image = petalImages[Math.floor(Math.random() * petalImages.length)];
                 
-                // Spawn based on the dynamically updating logical boundaries
+                if (Math.random() < rareProbability && rareImage) {
+                    this.image = rareImage;
+                } else {
+                    this.image = regularImages[Math.floor(Math.random() * regularImages.length)];
+                }
+                
                 this.x = Math.random() * logicalWidth;
                 this.y = isFirstLoad ? Math.random() * logicalHeight : -50; 
                 
                 const depth = Math.random() * 0.6 + 0.4;
-                
-                // --- IMAGE ASSET SIZING ---
-                // If you want the physical size of the petals to be larger or smaller
-                // adjust the '20' (width) and '24' (height) multipliers here.
                 this.w = 20 * depth; 
                 this.h = 24 * depth; 
                 
@@ -101,14 +98,11 @@ export default function SakuraCanvas() {
             draw() {
                 if (!ctx || !this.image.complete) return;
                 ctx.save();
-                
                 ctx.translate(this.x, this.y);
                 ctx.rotate(this.angle);
                 ctx.scale(Math.sin(this.flip), 1);
                 ctx.globalAlpha = this.opacity;
-
                 ctx.drawImage(this.image, -this.w / 2, -this.h / 2, this.w, this.h);
-                
                 ctx.restore();
             }
 
@@ -118,17 +112,15 @@ export default function SakuraCanvas() {
                 this.angle += this.spinSpeed;
                 this.flip += this.flipSpeed;
 
-                // --- 3. DYNAMIC BOUNDARY CHECK ---
-                // Prevents petals from getting permanently stranded off-screen when shrinking the window
                 if (this.y > logicalHeight + this.h || this.x > logicalWidth + this.w || this.x < -this.w) {
                     this.init();
                 }
             }
         }
 
-        // Wait for all images to load, then start animation
+        // Loop checks if loading thresholds have completed smoothly before execution bounds trigger
         const checkAllLoaded = setInterval(() => {
-            if (loadedImageCount === petalImages.length && petalImages.length > 0) {
+            if (loadedImageCount === totalImagesToLoad) {
                 clearInterval(checkAllLoaded);
                 
                 for (let i = 0; i < maxPetals; i++) {
@@ -136,7 +128,6 @@ export default function SakuraCanvas() {
                 }
 
                 const animate = () => {
-                    // Clear using the precise logical dimensions
                     ctx.clearRect(0, 0, logicalWidth, logicalHeight);
                     for (let i = 0; i < petalsArray.length; i++) {
                         petalsArray[i].update();
@@ -159,8 +150,6 @@ export default function SakuraCanvas() {
         <canvas
             ref={canvasRef}
             className="fixed top-0 left-0 z-[-1] pointer-events-none block"
-            // Note: Tailwind width/height classes are removed here because we 
-            // inject precise CSS dimensions directly in the resizeCanvas function.
         />
     );
 }

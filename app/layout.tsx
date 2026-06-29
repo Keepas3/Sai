@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Comfortaa } from "next/font/google";
 
 import SakuraCanvas from "@/components/sai";
 import Footer from '@/components/Footer' 
+
+const comfortaa = Comfortaa({
+  subsets: ["latin"],
+  variable: "--font-comfortaa",
+});
 
 export const metadata: Metadata = {
   title: "Sai",
@@ -15,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="scroll-smooth">
+    <html lang="en" className={`scroll-smooth ${comfortaa.variable}`}>
       {/* 1. Added "flex flex-col" here to stack the page vertically */}
       <body className="bg-[#111424] text-white antialiased min-h-screen relative overflow-x-hidden flex flex-col">
         

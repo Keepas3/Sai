@@ -14,6 +14,23 @@ export const structure: StructureResolver = (S) =>
             .schemaType('profile')
             .documentId('profile') // Keeps it as a single static page editor instead of a messy list!
         ),
+      S.listItem()
+        .title('Blog Posts')
+        .schemaType('post')
+        .child(
+        S.documentTypeList('post')
+          .title('Blog Posts & Logs')
+          .initialValueTemplates([S.initialValueTemplateItem('post')])
+        ),
+        S.listItem()
+      .title('Blog Categories')
+      .schemaType('category')
+      .child(
+        S.documentTypeList('category')
+          .title('Filter Topics / Tags')
+          .initialValueTemplates([S.initialValueTemplateItem('category')])
+      ),
+
 
       // 2. Music / Songs
       S.listItem()
@@ -22,11 +39,31 @@ export const structure: StructureResolver = (S) =>
         .child(S.documentTypeList('musicPage').title('Songs')),
 
 
-      // 3. Games
       S.listItem()
-        .title('Games')
-        .schemaType('game')
-        .child(S.documentTypeList('game').title('Games')),
+        .title('Library Page')
+        .child(
+          S.list()
+            .title('Library Tabs')
+            .items([
+              // Tab A: Loads your all-in-one game document wrapper directly
+              S.listItem()
+                .title('Games Tab')
+                .schemaType('game')
+                .child(
+                  S.documentTypeList('game')
+                    .title('Games Manager')
+                ),
+              // Tab B: Loads your books collection directly
+              S.listItem()
+                .title('Books Tab')
+                .schemaType('book')
+                .child(
+                  S.documentTypeList('book')
+                    .title('Books Manager')
+                ),
+            ])
+        ),
+
 
       // 4. Active Projects
       S.listItem()

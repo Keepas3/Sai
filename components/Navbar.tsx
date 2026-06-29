@@ -1,8 +1,16 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link'; 
+import { defineQuery } from 'next-sanity';
 
 
+const CATEGORIES_QUERY = defineQuery(`
+  *[_type == "category" && defined(slug.current)] {
+    _id,
+    title,
+    "slug": slug.current
+  }
+`)
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -31,8 +39,9 @@ export default function Navbar() {
 
       <ul className="nav-links">
         {/* Note: I also updated your Playlist link to use Next.js routing! */}
+        <li><Link href="/blog">Blog</Link></li>
         <li><Link href="/songs">Songs</Link></li>
-        <li><Link href="/games">Games</Link></li>
+        <li><Link href="/library">Library</Link></li>
         <li><Link href="/projects">Projects</Link></li>
         <li><Link href="/gallery">Gallery</Link></li>
       </ul>

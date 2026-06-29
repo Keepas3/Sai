@@ -64,14 +64,13 @@ export default function SpotifyStatus() {
   console.log('Parsed Bottom Layout Track ID:', historyTrackId);
 
   return (
-    <div className="flex flex-col gap-4 w-full max-w-xl mx-auto">
+    <div className="flex flex-col gap-6 w-full max-w-xl mx-auto">
       
-      {/* 1. TOP CARD: Dynamic Live Feed / Main History Placement */}
       {showTopCard && currentTrackId && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-5">
           <span 
             className="text-[10px] font-mono uppercase tracking-wider pl-1 transition-colors duration-300"
-            style={{ color: isNowPlaying ? '#1DB954' : '#a1a1aa' }}
+            style={{ color: isNowPlaying ? '#a1a1aa' : '#1DB954' }}
           >
             {isNowPlaying ? '• Now Playing' : 'Recently Played'}
           </span>
@@ -91,8 +90,9 @@ export default function SpotifyStatus() {
       )}
 
       {/* 2. BOTTOM CARD: Dynamic History Layout / Secondary Downstream Sequence */}
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 pl-1">
+      <div className="flex flex-col gap-5">
+        <span className="text-[10px] font-mono uppercase tracking-wider pl-1 transition-colors duration-300"
+          style={{ color: isNowPlaying ? '#1DB954' : '#a1a1aa' }}>
           {isNowPlaying ? 'On Rotation' : 'Previously Listened'}
         </span>
         <div className="w-full rounded-xl overflow-hidden h-[152px]">
