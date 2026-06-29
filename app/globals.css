@@ -995,41 +995,52 @@
 /* Mobile Design*/
 @media (max-width: 768px) {
     .navbar {
-        padding: 0 10% !important; 
+        padding: 0 5% !important; 
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important; /* ◄ Pushes "Sai" to the left edge and links to the right edge */
+        gap: 0.9rem
     }
 
     .nav-links {
-        gap: 1rem !important; 
-        font-size: 1rem !important;
         display: flex;
         list-style: none;
-       
-    }
-    .banner-container {
-        height: 500px; /* Shrinks the banner height so the browser doesn't have to zoom in as much */
+        gap: 1.5rem !important; /* Increased from 1rem for cleaner text separation and tapping room */
+        font-size: 0.95rem !important; /* Slightly optimized text scaling */
+        
+        /* --- ENABLE HORIZONTAL TOUCH SCROLLING --- */
+        overflow-x: auto;
+        white-space: nowrap; /* Forces all navigation options to stay on a single line row */
+        -webkit-overflow-scrolling: touch; /* Ensures buttery-smooth native momentum on iPhones */
+        padding-bottom: 4px; /* Tiny buffer zone preventing text clipping during scroll actions */
         width: 100%;
     }
+
+    /* --- HIDE RAW WEBKIT/BROWSER SCROLLBARS FOR A CLEAN LOOK --- */
+    .nav-links::-webkit-scrollbar {
+        display: none;
+    }
+    .nav-links {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+
+    .banner-container {
+        height: 500px;
+        width: 100%;
+    }
+
     .banner-image {
-        /* 2. Control the camera! 
-           Change 'center' to 'left' or 'right' depending on where the best details are */
         object-position: 75% center; 
     }
 
     .portfolio-main {
-        /* INCREASE THIS NUMBER: Try 220px to 250px. 
-           This pushes the avatar, name, and bio further down the screen. */
         padding-top: 410px; 
-        
-        /* Optional: Reduces the massive gap between the bio and the games section on mobile */
-        
     }
-    
-    
     
     .profile-bio {
         border-left: none;
-        border-top: 2px solid #e5729f; /* Moves the accent line to the top for a centered layout */
+        border-top: 2px solid #e5729f; 
         border-radius: 8px;
     }
-    
 }

@@ -20,7 +20,6 @@ interface DashboardProject {
   imageUrl?: string; 
 }
 
-// 1. UPDATED: Unified Media Item interface for the smart tracker block
 interface HomeMediaItem {
   title: string;
   status: string;
@@ -50,7 +49,6 @@ export default async function Home() {
       }
     },
     
-    // SMART SORTED GAMES DECK (SLICES TOP 2)
     "gamesData": *[_type == "game" && defined(gamesList)][0] {
       "gamesList": (
         gamesList[] {
@@ -67,7 +65,6 @@ export default async function Home() {
       ) | order(weight asc)[0..1]
     },
 
-    // SMART SORTED BOOKS DECK (SLICES TOP 2)
     "booksData": *[_type == "book" && defined(booksList)][0] {
       "booksList": (
         booksList[] {
@@ -94,7 +91,6 @@ export default async function Home() {
   const profile: ProfileData | null = data.profile;
   const projects: DashboardProject[] = data.projectsData?.projectList || [];
   
-  // 2. UPDATED: Extraction layers matching your new smart GROQ query arrays
   const games: HomeMediaItem[] = data.gamesData?.gamesList || [];
   const books: HomeMediaItem[] = data.booksData?.booksList || [];
   const categories: DashboardCategory[] = data.categories || []; 
@@ -142,21 +138,47 @@ export default async function Home() {
           
           {/* ROW 1: Spotify & Consolidated Activity Tracker */}
           <div className="top-activity-row">
+            
             {/* Spotify Column */}
             <div className="status-box flex flex-col justify-between">
               <div>
-                <h3>🎵 Currently Listening</h3>
-                <p className="text-xs text-white/40 font-mono tracking-wide mt-1 mb-4 uppercase"></p>
+                {/* FIXED: Gap adjusted to 8px; custom top margin removed to lift icon up */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '0.5rem' }}>
+                  <svg 
+                    className="text-[#e5729f] shrink-0" 
+                    fill="currentColor" 
+                    viewBox="0 0 24 24" 
+                    style={{ width: '20px', height: '20px', marginTop: '-4px' }} 
+                  >
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                  </svg>
+                  <h3 className="text-lg font-bold text-white m-0 leading-none">Currently Listening</h3>
+                </div>
+                <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest mb-4"></p>
               </div>
+              
               <div className="w-full">
                 <SpotifyStatus />
               </div>
             </div>
 
-            {/* 3. UPDATED: New Consolidated Smart Activity Tracker Column */}
+            {/* --- CONSOLIDATED CURRENT ACTIVITY COLUMN --- */}
             <div className="status-box">
-              <h3>🎮 Activity Tracker</h3>
-             
+              {/* FIXED: Unified gap to 8px; icon alignment shifted upwards via negative margin */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.5rem' }}>
+                <svg 
+                  className="text-[#e5729f] shrink-0" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  strokeWidth="2" 
+                  stroke="currentColor"
+                  style={{ width: '20px', height: '20px', marginTop: '-2px' }}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                </svg>
+                <h3 className="text-lg font-bold text-white m-0 leading-none">Activity Tracker</h3>
+              </div>
+              <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest mb-4"></p>
               
               <div className="flex flex-col gap-5">
                 
@@ -167,7 +189,7 @@ export default async function Home() {
                   ) : (
                     games.map((game, index) => (
                       <div key={`game-${index}`} className="game-item">
-                        <div className="w-[55px] h-[55px] rounded-md overflow-hidden flex items-center justify-center bg-white/5 shrink-0 border border-white/10">
+                        <div className="w-[55px] h-[55px] rounded-md overflow-hidden flex items-center justify-center bg-white/5 shrink-0 shadow-lg">
                           {game.imageUrl ? (
                             <img src={game.imageUrl} alt={game.title} className="w-full h-full object-cover" />
                           ) : (
@@ -187,7 +209,7 @@ export default async function Home() {
                   )}
                 </div>
 
-                {/* Micro Visual Divider Split Line */}
+                {/* Visual Separator Divider Line */}
                 <div className="h-[1px] w-full bg-white/5" />
 
                 {/* Sub-Section B: Books Library */}
@@ -197,7 +219,7 @@ export default async function Home() {
                   ) : (
                     books.map((book, index) => (
                       <div key={`book-${index}`} className="game-item">
-                        <div className="w-[55px] h-[55px] rounded-md overflow-hidden flex items-center justify-center bg-white/5 shrink-0 border border-white/10">
+                        <div className="w-[55px] h-[55px] rounded-md overflow-hidden flex items-center justify-center bg-white/5 shrink-0 shadow-lg">
                           {book.imageUrl ? (
                             <img src={book.imageUrl} alt={book.title} className="w-full h-full object-cover" />
                           ) : (
@@ -224,32 +246,65 @@ export default async function Home() {
           {/* ROW 2: Featured Active Project */}
           <div className="projects-row">
             <div className="status-box w-100">
-              <h3>💻 Active Projects</h3>
+              
+              {/* FIXED: Standardized row spacing structure to match top row layouts */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.5rem' }}>
+                <svg 
+                  className="text-[#e5729f] shrink-0" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  strokeWidth="2" 
+                  stroke="currentColor"
+                  style={{ width: '20px', height: '20px', marginTop: '-1px' }}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.77 3.77Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12.8 4.4l2.8 2.8" />
+                </svg>
+                <h3 className="text-lg font-bold text-white m-0 leading-none">Active Projects</h3>
+              </div>
+          
+
               {!activeProject ? (
-                <p className="status-text italic">No active projects linked.</p>
-              ) : (
-                <div className="project-list">
-                  <div className="project-item">
-                    {activeProject.imageUrl && (
-                      <div className="w-full overflow-hidden rounded-xl border border-white/10 mb-4 bg-black/20">
-                        <img src={activeProject.imageUrl} alt={activeProject.title} className="w-full object-cover max-h-[500px]" />
-                      </div>
+              <p className="status-text italic">No active projects linked.</p>
+            ) : (
+              <div className="project-list">
+                <div className="project-item">
+                  {activeProject.imageUrl && (
+              /* OVERRIDE: Dropped border classes for direct inline styles to force-kill the white outline */
+              <div 
+                className="w-full overflow-hidden rounded-xl mb-4 bg-black/20"
+                style={{ 
+                  border: '1px solid rgba(255, 255, 255, 0.02)', // ◄ Forcefully makes the border dark/invisible
+                  boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6)'    // ◄ Uses a rich shadow for edge separation instead
+                }}
+              >
+                <img 
+                  src={activeProject.imageUrl} 
+                  alt={activeProject.title} 
+                  className="w-full object-cover max-h-[500px]" 
+                />
+              </div>
+            )}
+                  <h4>
+                    {activeProject.projectLink ? (
+                      <a 
+                        href={activeProject.projectLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-[#e5729f] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        {activeProject.title} <span className="text-xs opacity-60">↗</span>
+                      </a>
+                    ) : (
+                      activeProject.title
                     )}
-                    <h4>
-                      {activeProject.projectLink ? (
-                        <a href={activeProject.projectLink} target="_blank" rel="noopener noreferrer" className="text-[#e5729f] hover:underline inline-flex items-center gap-1 cursor-pointer">
-                          {activeProject.title} <span className="text-xs opacity-60">↗</span>
-                        </a>
-                      ) : (
-                        activeProject.title
-                      )}
-                    </h4>
-                    <p className="status-text mt-1">{activeProject.description}</p>
-                  </div>
+                  </h4>
+                  <p className="status-text mt-1">{activeProject.description}</p>
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            )}
+                        </div>
+                      </div>
 
           {/* ROW 3: Blog Exploration Grid Layout */}
           <div className="blog-topics-row mt-8">
