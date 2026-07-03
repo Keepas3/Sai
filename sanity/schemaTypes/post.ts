@@ -57,8 +57,33 @@ export const postType = defineType({
       name: 'body',
       title: 'Full Log Content',
       type: 'array',
-      of: [{ type: 'block' }],
-      description: 'Write your full article or diary entry notes here.',
+      description: 'Write your full article or diary entry notes here. Supports rich text formatting.',
+      of: [
+        {
+          type: 'block',
+          // Styles dropdown (like Google Docs' Normal, Heading 1, Heading 2)
+          styles: [
+            { title: 'Normal', value: 'normal' },
+            { title: 'Heading 1', value: 'h1' },
+            { title: 'Heading 2', value: 'h2' },
+            { title: 'Blockquote', value: 'blockquote' },
+          ],
+          // Lists (Bullet points and Numbered lists)
+          lists: [
+            { title: 'Bullet', value: 'bullet' },
+            { title: 'Numbered', value: 'number' },
+          ],
+          // Marks handle inline decorations (Bold, Italic, Underline, Code)
+          marks: {
+            decorators: [
+              { title: 'Bold', value: 'strong' },
+              { title: 'Italic', value: 'em' },
+              { title: 'Underline', value: 'underline' },
+              { title: 'Code', value: 'code' },
+            ],
+          },
+        },
+      ],
     }),
   ],
 })
