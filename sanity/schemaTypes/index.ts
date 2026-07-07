@@ -6,7 +6,8 @@ import music from './music'
 import game from './game'
 import {bookType} from './book'
 import project from './project'
-import galleryPageContent from './gallery'
+import galleryTopic from './galleryTopic'
+import galleryItem from './galleryItem'
 
 
 export const schema: { types: SchemaTypeDefinition[] } = {
@@ -18,6 +19,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     game,
     bookType,
     project,
-    galleryPageContent,
+    galleryTopic,
+    galleryItem,
   ],
 }

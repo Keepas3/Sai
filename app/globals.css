@@ -839,83 +839,99 @@
 }
 
 /* ==========================================================================
-   GALLERY COMPONENT STYLES
+   GALLERY COMPONENT STYLES (TIGHT & CENTERED FIT)
    ========================================================================== */
+
+/* --- THE MAIN VIEWPORT SLIDER WRAPPER --- */
 .gallery-wrapper {
     position: relative;
     width: 100%;
-    max-width: 900px;
-
-    height: clamp(300px, 50vw, 500px); 
+    max-width: 850px; /* Slimmed down slightly to keep images crisp */
     margin: 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
 }
-
-.gallery-slide-window {
-    width: 100%;
-    height: 100%;
-    overflow: hidden; 
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(0, 0, 0, 0.4);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
-
+/* The horizontal slider track assembly */
 .gallery-track {
     display: flex;
     width: 100%;
     height: 100%;
-    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); 
+    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); 
+}
+
+/* Ensure the outer window adjusts its height naturally based on the current slide */
+.gallery-slide-window {
+    width: 100%;
+    height: auto; /* ◄ CHANGED: Allows the frame to collapse tightly onto the image height */
+    overflow: hidden; 
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #0a0a0a; 
+
 }
 
 .gallery-slide {
     min-width: 100%;
     width: 100%;
-    height: 100%;
+    height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0; /* Remove padding so it hugs the image borders perfectly */
 }
 
 .gallery-image {
     width: 100%;
-    height: 100%;
-    
-    object-fit: cover; 
-    object-position: left center; 
+    height: auto; /* ◄ Maintains pristine, un-cropped aspect ratio */
+    max-height: 70vh; /* Prevents vertically tall images from taking over the entire screen */
+    object-fit: contain;
     display: block;
 }
 
-/* Glassmorphism Gallery Controls */
+/* THE IMAGE ASSET RULES */
+.gallery-slide-window {
+    width: 100%;
+    height: 500px; /* Your chosen fixed desktop height */
+    overflow: hidden; 
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #0d0d0d; /* Keeps the canvas uniform */
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* Glassmorphism Gallery Arrow Controls */
 .gallery-control-btn {
     position: absolute;
-    z-index: 20;
+    z-index: 40;
     top: 50%;
     transform: translateY(-50%);
-    background: rgba(17, 20, 36, 0.6);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(17, 20, 36, 0.7);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     color: white;
-    width: 50px;
-    height: 50px;
+    width: 44px; /* Scaled down slightly to look less bulky */
+    height: 44px;
     border-radius: 50%;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .gallery-control-btn:hover {
-    background: #f26e8c; 
+    background: #e5729f; 
     border-color: transparent;
-    transform: translateY(-50%) scale(1.1);
+    transform: translateY(-50%) scale(1.08);
 }
 
-.gallery-control-btn.left { left: -25px; }
-.gallery-control-btn.right { right: -25px; }
+/* Placed just right on the edges */
+.gallery-control-btn.left { left: -22px; }
+.gallery-control-btn.right { right: -22px; }
 
-/* Slide Indicator Dots */
+/* Slide Indicator Dots & Metadata Positioning */
 .gallery-dots {
     display: flex;
     justify-content: center;
@@ -923,23 +939,41 @@
 }
 
 .gallery-dots .dot {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.2);
     cursor: pointer;
-    transition: background 0.3s ease, transform 0.3s ease;
+    transition: all 0.3s ease;
 }
 
 .gallery-dots .dot.active {
-    background: #f26e8c;
+    background: #e5729f;
     transform: scale(1.2);
 }
+
 .gallery-meta {
-    margin-top: 2rem; /* Creates the space between the image and text */
+    margin-top: 1.5rem; /* Tighter gap between text data and slider window */
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;    
+    gap: 0.4rem;    
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+/* ==========================================================================
+   MOBILE & TABLET OVERRIDES
+   ========================================================================== */
+@media (max-width: 768px) {
+    .gallery-slide {
+        padding: 0.25rem; /* Minimal padding on phone viewports */
+    }
+
+    /* Bring arrows inside the screen padding boundary on mobile devices */
+    .gallery-control-btn.left { left: 8px; }
+    .gallery-control-btn.right { right: 8px; }
 }
 /* ==========================================================================
    FOOTER SECTION

@@ -63,18 +63,19 @@ export const structure: StructureResolver = (S) =>
                 ),
             ])
         ),
-
-
       // 4. Active Projects
       S.listItem()
         .title('Projects')
         .schemaType('project')
         .child(S.documentTypeList('project').title('Projects')),
-
       
       // 5. Gallery
       S.listItem()
-        .title('Visual Gallery')
-        .schemaType('galleryPageContent')
-        .child(S.documentTypeList('galleryPageContent').title('Gallery Images')),
+        .title('Gallery Albums')
+        .schemaType('galleryTopic')
+        .child(
+          S.documentTypeList('galleryTopic')
+            .title('Albums & Archives')
+        ),
+    
     ])
