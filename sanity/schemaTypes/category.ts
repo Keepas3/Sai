@@ -13,7 +13,7 @@ export const categoryType = defineType({
     }),
     defineField({
       name: 'slug',
-      title: 'Slug',
+      title: 'Folder / Web Link Identifier',
       type: 'slug',
       options: {
         source: 'title',

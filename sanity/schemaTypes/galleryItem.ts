@@ -7,7 +7,7 @@ export default defineType({
   fields: [
     defineField({
       name: 'title',
-      title: 'Asset Title',
+      title: 'Image Title',
       type: 'string',
       validation: (Rule) => Rule.required(),
     }),
@@ -20,7 +20,7 @@ export default defineType({
     }),
     defineField({
       name: 'image',
-      title: 'Gallery Image Asset',
+      title: 'Gallery Image',
       type: 'image',
       options: {
         hotspot: true,

@@ -2,7 +2,7 @@ import { defineField, defineType } from 'sanity';
 
 export default defineType({
   name: 'galleryTopic',
-  title: 'Gallery Albums',
+  title: 'Gallery',
   type: 'document',
   fields: [
     defineField({
@@ -13,7 +13,7 @@ export default defineType({
     }),
     defineField({
       name: 'slug',
-      title: 'Slug',
+      title: 'Folder / Web Link Identifier',
       type: 'slug',
       options: {
         source: 'title',
@@ -23,7 +23,7 @@ export default defineType({
     }),
     defineField({
       name: 'description',
-      title: 'Album Summary',
+      title: 'Album Description',
       type: 'string',
     }),
     // ─── NEW FIELD: The Drag-and-Drop Array ───
