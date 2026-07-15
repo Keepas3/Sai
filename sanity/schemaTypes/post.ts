@@ -12,6 +12,7 @@ export const postType = defineType({
       description: 'The main headline of your log entry (e.g., "Japanese Learning Journey").',
       validation: (Rule) => Rule.required(),
     }),
+    
     defineField({
       name: 'slug',
       title: 'URL Web Link Identifier', // Change the user-facing label here!
@@ -29,6 +30,14 @@ export const postType = defineType({
       type: 'datetime',
       description: 'The date this log occurred. This controls where it sits on your monthly timeline.',
       validation: (Rule) => Rule.required(),
+    }),
+    // Add this right after your 'slug' or 'publishedAt' field
+    defineField({
+      name: 'isPinned',
+      title: 'Pin to Top of Blog',
+      type: 'boolean',
+      description: 'Turn this on to pin this post to the top of the blog page (max 3 will be shown).',
+      initialValue: false,
     }),
     defineField({
       name: 'excerpt',

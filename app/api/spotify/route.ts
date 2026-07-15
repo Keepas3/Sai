@@ -10,6 +10,7 @@ export async function GET() {
   let currentTrackData = null;
   let recentTrackData = null;
   let secondRecentTrackData = null;
+  let thirdRecentTrackData = null; // NEW: Added to catch the 3rd history item
 
   try {
     const [currentRes, recentRes] = await Promise.allSettled([
@@ -31,28 +32,44 @@ export async function GET() {
       }
     }
 
-    // 2. Check Recently Played History Stream (Extracting 1st and 2nd items)
+    // 2. Check Recently Played History Stream (WITH DEDUPLICATION)
     if (recentRes.status === 'fulfilled' && recentRes.value.status === 200) {
       const history = await recentRes.value.json();
       
-      // Most recent song
-      const lastTrack = history.items?.[0]?.track;
-      if (lastTrack) {
+      // Clean the array: Remove consecutive duplicates caused by pause/play glitches
+      const uniqueItems = [];
+      let lastId = null;
+
+      for (const item of history.items || []) {
+        if (item.track.id !== lastId) {
+          uniqueItems.push(item);
+          lastId = item.track.id;
+        }
+      }
+
+      // Now assign slots from our cleaned unique list
+      if (uniqueItems[0]?.track) {
         recentTrackData = {
-          title: lastTrack.name,
-          songUrl: lastTrack.external_urls.spotify,
+          title: uniqueItems[0].track.name,
+          songUrl: uniqueItems[0].track.external_urls.spotify,
         };
         console.log('📻 Spotify History 1:', recentTrackData.title);
       }
 
-      // Second most recent song
-      const secondLastTrack = history.items?.[1]?.track;
-      if (secondLastTrack) {
+      if (uniqueItems[1]?.track) {
         secondRecentTrackData = {
-          title: secondLastTrack.name,
-          songUrl: secondLastTrack.external_urls.spotify,
+          title: uniqueItems[1].track.name,
+          songUrl: uniqueItems[1].track.external_urls.spotify,
         };
         console.log('📻 Spotify History 2:', secondRecentTrackData.title);
+      }
+
+      if (uniqueItems[2]?.track) {
+        thirdRecentTrackData = {
+          title: uniqueItems[2].track.name,
+          songUrl: uniqueItems[2].track.external_urls.spotify,
+        };
+        console.log('📻 Spotify History 3:', thirdRecentTrackData.title);
       }
     }
   } catch (e: any) {
@@ -68,7 +85,9 @@ export async function GET() {
     return NextResponse.json({
       statusType: 'playing',
       songUrl: currentTrackData.songUrl,
-      recentSongUrl: recentTrackData?.songUrl || '06DHZv4ahSwp30plm1kbgM'
+      recentSongUrl: recentTrackData?.songUrl || '06DHZv4ahSwp30plm1kbgM',
+      // NEW: If they are playing a song on repeat, this provides the 2nd history item as a backup
+      thirdSongUrl: secondRecentTrackData?.songUrl || '06DHZv4ahSwp30plm1kbgM' 
     });
   }
 
@@ -76,10 +95,11 @@ export async function GET() {
   if (recentTrackData) {
     console.log('💤 Friend offline. Shifting history items up into the slots.');
     return NextResponse.json({
-      // We label it 'offline' so the frontend component knows to alter the text headers while keeping both cards rendered
       statusType: 'offline', 
       songUrl: recentTrackData.songUrl,
-      recentSongUrl: secondRecentTrackData?.songUrl || '06DHZv4ahSwp30plm1kbgM'
+      recentSongUrl: secondRecentTrackData?.songUrl || '06DHZv4ahSwp30plm1kbgM',
+      // NEW: If their top two history items are identical, this provides the 3rd history item as a backup
+      thirdSongUrl: thirdRecentTrackData?.songUrl || '06DHZv4ahSwp30plm1kbgM'
     });
   }
 
@@ -87,6 +107,7 @@ export async function GET() {
   return NextResponse.json({
     statusType: 'recommendation',
     songUrl: '06DHZv4ahSwp30plm1kbgM',
-    recentSongUrl: '06DHZv4ahSwp30plm1kbgM'
+    recentSongUrl: '06DHZv4ahSwp30plm1kbgM',
+    thirdSongUrl: '06DHZv4ahSwp30plm1kbgM' // Fallback for the third slot
   });
 }

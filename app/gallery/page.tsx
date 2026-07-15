@@ -288,41 +288,32 @@ export default function GalleryPage() {
              VIEW 2: THE IMAGE GALLERY VIEWER
              ========================================= */
           <div className="viewer-view animate-fade-in mt-4">
-            {/* Header: Transparent Back Arrow */}
-            {/* --- EXACT BLOG BACK ARROW --- */}
-<div className="flex items-center justify-between mb-8 px-4 w-full">
-  {/* Left Side: Purple Arrow Button */}
-  <div className="flex justify-start">
-    <button 
-      onClick={closeTopic} 
-      className="group flex items-center justify-center p-1 transition-all duration-200 ease-in-out hover:-translate-x-1.5 outline-none bg-transparent border-none cursor-pointer"
-      style={{ textDecoration: 'none' }} 
-      title="Back to albums"
-    >
-          <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      fill="none" 
-      viewBox="0 0 24 24" 
-      strokeWidth={2.5} 
-      /* 1. We changed stroke to a hardcoded hex color to completely bypass Tailwind's color system */
-      stroke="#a855f7" 
-      /* 2. Swapped the hover color for a standard CSS filter mix to brighten it on hover */
-      className="transition-all duration-200 ease-in-out hover:brightness-125 drop-shadow-[0_2px_10px_rgba(168,85,247,0.3)]"
-      style={{ width: '28px', height: '28px' }}
-    >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-      </svg>
-    </button>
-  </div>
+            {/* Header / Sub-Nav Bar Container */}
+          <div className="flex items-center justify-between mb-8 px-4 w-full">
+            
+            {/* Left Side: Back Button (Uses exact blog styling, but triggers closeTopic) */}
+            <div className="flex-1 flex justify-start">
+              <button 
+                onClick={closeTopic}
+                className="group inline-flex items-center text-[#9ca3af] hover:text-white transition-colors duration-200 uppercase tracking-[2px] font-bold text-[11px] bg-transparent border-none cursor-pointer outline-none p-0"
+              >
+                <span className="text-[16px] mr-3 leading-none group-hover:-translate-x-1 transition-transform duration-200">
+                  ←
+                </span> 
+                Back To Gallery
+              </button>
+            </div>
 
-  {/* Center: Album Title */}
-  <h2 className="text-xl md:text-3xl font-serif font-bold text-white tracking-wide drop-shadow-lg text-center">
-    {activeTopic?.title}
-  </h2>
+            {/* Center: Album Title */}
+            <div className="flex-1 flex justify-center">
+              <h2 className="text-xl md:text-3xl font-serif font-bold text-white tracking-wide drop-shadow-lg text-center m-0">
+                {activeTopic?.title}
+              </h2>
+            </div>
 
-  {/* Right Side: Spacer to keep the title perfectly centered */}
-  <div className="w-10" /> 
-</div>
+            {/* Right Side: Spacer to keep the title perfectly centered */}
+            <div className="flex-1"></div> 
+          </div>
 
             {filteredSlides.length === 0 ? (
               <div className="status-box p-12 flex flex-col items-center justify-center text-center">
@@ -333,7 +324,7 @@ export default function GalleryPage() {
                 <div className="gallery-wrapper">
                   <button onClick={prevSlide} className="gallery-control-btn left">&#10094;</button>
 
-                  <div className="gallery-slide-window">
+                  <div className="gallery-slide-window-dynamic">
                     <div 
                       className="gallery-track"
                       style={{ transform: `translateX(-${currentIndex * 100}%)` }}

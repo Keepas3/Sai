@@ -112,80 +112,81 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
       <main className="page-container" style={{ maxWidth: '800px', margin: '0 auto' }}>
         
-        {/* --- BACK ARROW --- */}
-        <div className="flex justify-start mb-8">
-          <Link 
-            href="/blog" 
-            className="group flex items-center justify-center p-1 transition-all duration-200 ease-in-out hover:-translate-x-1.5 outline-none decoration-none!"
-            style={{ textDecoration: 'none' }} 
-            title="Back to timeline"
-          >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              strokeWidth={2.5} 
-              stroke="currentColor" 
-              className="text-white/60 group-hover:text-white transition-colors duration-200 drop-shadow-[0_2px_8px_rgba(255,255,255,0.1)]"
-              style={{ width: '28px', height: '28px' }}
+        <div className="viewer-view animate-fade-in mt-4">
+          
+          {/* Header / Sub-Nav Bar Container */}
+          <div className="flex items-center justify-between mb-8 px-4 w-full">
+            
+            <div className="flex-1 flex justify-start">
+            <Link 
+              href="/blog"
+              className="group inline-flex items-center text-[#9ca3af] hover:text-white transition-colors duration-200 uppercase tracking-[2px] font-bold text-[11px] no-underline"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-          </Link>
-        </div>
-        
-        {/* --- TOPIC TAGS --- */}
-        {post.categories && post.categories.length > 0 && (
-          <div className="flex justify-center gap-2 mb-4 flex-wrap">
-            {post.categories.map((cat: { title: string }, index: number) => (
-              <span key={index} className="tag">
-                {cat.title}
-              </span>
-            ))}
+              
+              <span className="text-[16px] mr-3 leading-none group-hover:-translate-x-1 transition-transform duration-200">
+                ←
+              </span> 
+              Back To Blogs
+            </Link>
           </div>
-        )}
-
-        {/* Title & Date Headline Block */}
-        <h1 className="text-3xl md:text-4xl font-bold font-serif text-white text-center leading-tight mb-4">
-          {post.title}
-        </h1>
-
-        <p className="text-xs font-mono text-white/30 text-center mb-10">
-          {new Date(post.publishedAt).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })}
-        </p>
-
-        {/* ─── ADDED: OPTIONAL FEATURE COVER IMAGE BANNER ─── */}
-        {post.mainImage && (
-          <div 
-            className="w-full overflow-hidden rounded-xl mb-8 bg-black/20"
-            style={{ 
-              border: '1px solid rgba(255, 255, 255, 0.03)',
-              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)'
-            }}
-          >
-            <img 
-              src={urlFor(post.mainImage).url()} 
-              alt={`Cover illustration for ${post.title}`} 
-              className="w-full object-cover max-h-[400px] block" 
-            />
+            
+            {/* Empty right side to balance flex-1 */}
+            <div className="flex-1"></div>
           </div>
-        )}
-
-        {/* Premium Dark Glassmorphism Content Box */}
-        <div className="status-box p-6 md:p-8 font-sans">
-          {post.body ? (
-            <div className="w-full text-white/90">
-              <PortableText value={post.body} components={blogComponents} />
+          
+          {/* --- TOPIC TAGS --- */}
+          {post.categories && post.categories.length > 0 && (
+            <div className="flex justify-center gap-2 mb-4 flex-wrap">
+              {post.categories.map((cat: { title: string }, index: number) => (
+                <span key={index} className="tag">
+                  {cat.title}
+                </span>
+              ))}
             </div>
-          ) : (
-            <p className="status-text italic text-white/30 text-center py-6">
-              This entry has no written content in the body yet.
-            </p>
           )}
+
+          {/* Title & Date Headline Block */}
+          <h1 className="text-3xl md:text-4xl font-bold font-serif text-white text-center leading-tight mb-4">
+            {post.title}
+          </h1>
+
+          <p className="text-xs font-mono text-white/30 text-center mb-10">
+            {new Date(post.publishedAt).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}
+          </p>
+
+          {/* ─── ADDED: OPTIONAL FEATURE COVER IMAGE BANNER ─── */}
+          {post.mainImage && (
+            <div 
+              className="w-full overflow-hidden rounded-xl mb-8 bg-black/20"
+              style={{ 
+                border: '1px solid rgba(255, 255, 255, 0.03)',
+                boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)'
+              }}
+            >
+              <img 
+                src={urlFor(post.mainImage).url()} 
+                alt={`Cover illustration for ${post.title}`} 
+                className="w-full object-cover max-h-[400px] block" 
+              />
+            </div>
+          )}
+
+          {/* Premium Dark Glassmorphism Content Box */}
+          <div className="status-box p-6 md:p-8 font-sans">
+            {post.body ? (
+              <div className="w-full text-white/90">
+                <PortableText value={post.body} components={blogComponents} />
+              </div>
+            ) : (
+              <p className="status-text italic text-white/30 text-center py-6">
+                This entry has no written content in the body yet.
+              </p>
+            )}
+          </div>
         </div>
       </main>
     </div>

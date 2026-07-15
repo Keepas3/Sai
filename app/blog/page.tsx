@@ -13,12 +13,14 @@ interface BlogPost {
   excerpt?: string;
   categorySlug?: string;
   categoryTitle?: string;
+  isPinned?: boolean; // NEW: Added isPinned to the interface
 }
 
 export default function BlogPage() {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [expandedMonths, setExpandedMonths] = useState<{ [key: string]: boolean }>({});
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isFeaturedOpen, setIsFeaturedOpen] = useState(true);
   
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [categories, setCategories] = useState<{title: string, slug: string}[]>([]);
@@ -35,6 +37,7 @@ export default function BlogPage() {
             "slug": slug.current,
             publishedAt,
             excerpt,
+            isPinned, // NEW: Fetching the boolean from Sanity
             "categorySlug": categories[0]->slug.current,
             "categoryTitle": categories[0]->title
           },
@@ -82,6 +85,9 @@ export default function BlogPage() {
     return post.categorySlug === activeCategory;
   });
 
+  // NEW: Grab only pinned posts (from the active category), capped at 3 max
+  const pinnedPosts = filteredPosts.filter(post => post.isPinned).slice(0, 3);
+
   const groupedData = filteredPosts.reduce((groups: { [key: string]: BlogPost[] }, post) => {
     const monthKey = getMonthKey(post.publishedAt);
     if (!groups[monthKey]) groups[monthKey] = [];
@@ -100,7 +106,6 @@ export default function BlogPage() {
       <main className="page-container">
         <h1 className="page-title">Blog Posts</h1>
 
-        {/* --- REFACTORED CLEAN FILTER SELECTION --- */}
         <div className="flex justify-end mb-8 relative" ref={dropdownRef}>
           <div className="inline-flex items-center gap-2">
             <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">Filter:</span>
@@ -112,7 +117,6 @@ export default function BlogPage() {
             </button>
           </div>
 
-          {/* Minimalist Dropdown Absolute Menu */}
           {isMenuOpen && (
             <div className="absolute right-0 top-9 w-48 bg-[#121214] border border-white/10 rounded-lg shadow-2xl p-1 z-50 animate-fadeIn">
               <button
@@ -134,7 +138,74 @@ export default function BlogPage() {
           )}
         </div>
 
-        {/* --- CENTRALIZED TIMELINE BOX CONTAINER --- */}
+        {/* --- NEW: PINNED POSTS SECTION --- */}
+        {!loading && pinnedPosts.length > 0 && (
+          // Wrapped in the exact same status-box class as the main timeline
+          <div className="status-box mb-10 animate-fadeIn">
+            
+            {/* The Clickable Toggle Header */}
+            <button 
+              onClick={() => setIsFeaturedOpen(!isFeaturedOpen)}
+              className="w-full flex items-center group cursor-pointer border-none bg-transparent outline-none"
+            >
+              {/* Left-aligned Title */}
+              <div className="flex-1 flex justify-start">
+                <h2 className="text-[10px] font-mono text-[#e5729f] uppercase tracking-widest flex items-center gap-2 m-0">
+                  <span className="text-sm">📌</span> Featured Logs
+                </h2>
+              </div>
+              
+              {/* Perfectly Centered Arrow */}
+              <div className="flex-1 flex justify-center">
+                <span className="text-medium font-mono text-white/30 group-hover:text-[#e5729f] transition-transform duration-300">
+                  {isFeaturedOpen ? '▲' : '▼'}
+                </span>
+              </div>
+              
+              {/* Invisible spacer div to keep the center arrow mathematically perfect */}
+              <div className="flex-1"></div> 
+            </button>
+
+            {/* The Collapsible List */}
+            {isFeaturedOpen && (
+              <div className="flex flex-col gap-3 mt-4 animate-fadeIn">
+                {pinnedPosts.map((post) => (
+                  <Link 
+                    key={`pinned-${post._id}`} 
+                    href={`/blog/${post.slug}`}
+                    className="timeline-card-item group border border-[#e5729f]/30 bg-black/40 hover:border-[#e5729f]/60 hover:shadow-[0_0_15px_rgba(229,114,159,0.15)] transition-all duration-300"
+                    style={{ display: 'flex', flexDirection: 'column' }}
+                  >
+                    <div className="card-header-row" style={{ alignItems: 'flex-start' }}>
+                      <h3 className="card-heading-title line-clamp-2">
+                        {post.title}
+                      </h3>
+                      <span className="card-timestamp-date shrink-0 mt-1">
+                        {new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                    
+                    {post.excerpt && (
+                      <p className="card-excerpt-text line-clamp-3">
+                        {post.excerpt}
+                      </p>
+                    )}
+
+                    {post.categoryTitle && (
+                      <div className="mt-3 flex justify-end">
+                        <span className="text-[9px] font-mono text-[#e5729f] bg-[#e5729f]/10 px-2 py-0.5 rounded-full border border-[#e5729f]/20">
+                          {post.categoryTitle}
+                        </span>
+                      </div>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {/* --------------------------------- */}
+
         <div className="status-box">
           {loading ? (
             <p className="status-text italic text-white/30 text-center py-12">Querying database records...</p>
@@ -147,7 +218,6 @@ export default function BlogPage() {
                 
                 return (
                   <div key={monthKey} className="month-accordion-group">
-                    {/* Folder Trigger Header */}
                     <button 
                       onClick={() => toggleMonth(monthKey)}
                       className="timeline-marker"
@@ -160,7 +230,6 @@ export default function BlogPage() {
                       </span>
                     </button>
 
-                    {/* Nested Cards List Wrapper */}
                     {isExpanded && (
                       <div className="timeline-cards-list animate-fadeIn">
                         {groupedData[monthKey].map((post) => (

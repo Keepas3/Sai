@@ -104,11 +104,11 @@ export default async function PlaylistPage() {
                       <iframe 
                         src={embedSrc}
                         width="100%" 
-                        // FIXED: All tracks locked back to 152 to match sizes perfectly
                         height="152" 
                         frameBorder="0" 
                         allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
-                        className="rounded-lg shadow-md"
+                        // FIXED: Changed rounded-lg to rounded-xl (12px) to match Spotify
+                        className="rounded-xl shadow-md bg-black/20"
                         loading="lazy"
                         allowFullScreen
                         title={`Top Song ${index + 1}`}
@@ -142,7 +142,6 @@ export default async function PlaylistPage() {
                 )}
               </div>
 
-              {/* FIXED: Forces an exact clean text space gap directly underneath the description lines */}
               <div className="playlist-grid" style={{ marginTop: '10px' }}>
                 {activeUrls.map((url, urlIdx) => {
                   const embedSrc = resolveEmbedUrl(url);
@@ -159,7 +158,8 @@ export default async function PlaylistPage() {
                       allowFullScreen 
                       loading="lazy" 
                       className="spotify-embed"
-                      style={{ height: isYouTubePlaylist ? '360px' : '255px' }}
+                      /* FIXED: Forces Spotify into its clean 152px compact layout */
+                      style={{ height: isYouTubePlaylist ? '360px' : '152px' }}
                       title={`Embed Stream ${topicIdx}-${urlIdx}`}
                     ></iframe>
                   );

@@ -58,8 +58,8 @@ export default {
               name: 'urls',
               type: 'array',
               title: 'Playlist Links',
-              description: 'Paste up to 3 different playlist URLs under this topic.',
-              validation: (Rule: any) => Rule.max(3).error('Up to 3 playlists per topic.'),
+              description: 'Paste up to 4 different playlist URLs under this topic.',
+              validation: (Rule: any) => Rule.max(4).error('Up to 4 playlists per topic.'),
               of: [{ type: 'url' }]
             }
           ]

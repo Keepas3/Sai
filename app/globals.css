@@ -668,16 +668,20 @@
    ========================================================================== */
 .playlist-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(285px, 2fr));
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 1.55rem; 
     width: 100%;
 }
 
 .spotify-embed {
     width: 100%;
-    height: 255px !important; /* INCREASED: Gives enough height to show the playlist tracks */
+    /* FIXED: Snapped to Spotify's official Compact Mode height */
+    height: 152px !important; 
     
-   
+    border-radius: 12px !important; 
+    overflow: hidden !important;
+    background: transparent; 
+    border: none;
 }
 
 /* ==========================================================================
@@ -852,6 +856,7 @@
     align-items: center;
     justify-content: center;
 }
+
 /* The horizontal slider track assembly */
 .gallery-track {
     display: flex;
@@ -861,43 +866,49 @@
 }
 
 /* Ensure the outer window adjusts its height naturally based on the current slide */
-.gallery-slide-window {
-    width: 100%;
-    height: auto; /* ◄ CHANGED: Allows the frame to collapse tightly onto the image height */
-    overflow: hidden; 
+.gallery-slide-window-dynamic {
+    width: fit-content !important;
+    
+    /* NEW: Enforces a minimum baseline size so the box never gets too tiny */
+    min-width: 400px !important; 
+    min-height: 400px !important; 
+    
+    max-width: 85vw !important; 
+    max-height: 75vh !important;
+    height: auto;
+    overflow: hidden;
     border-radius: 16px;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    background: #0a0a0a; 
-
+    background: #0d0d0d;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+    transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    
+    /* NEW: Flex properties ensure that if the box is forced to its min-size, 
+       the track and images stay mathematically centered inside of it */
+    display: flex;
+    align-items: center;
 }
 
 .gallery-slide {
+    /* FIXED: Force the slide to take up exactly 100% of the dynamic window */
     min-width: 100%;
     width: 100%;
-    height: auto;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0; /* Remove padding so it hugs the image borders perfectly */
+    padding: 0;
+    margin: 0;
 }
 
 .gallery-image {
-    width: 100%;
-    height: auto; /* ◄ Maintains pristine, un-cropped aspect ratio */
-    max-height: 70vh; /* Prevents vertically tall images from taking over the entire screen */
+    width: 100% !important;
+    height: 100% !important;
+    /* FIXED: Ensures the image never overflows its minimum or maximum boundaries */
+    max-width: 100% !important; 
+    max-height: 70vh !important; 
     object-fit: contain;
     display: block;
-}
-
-/* THE IMAGE ASSET RULES */
-.gallery-slide-window {
-    width: 100%;
-    height: 500px; /* Your chosen fixed desktop height */
-    overflow: hidden; 
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: #0d0d0d; /* Keeps the canvas uniform */
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
 }
 
 /* Glassmorphism Gallery Arrow Controls */

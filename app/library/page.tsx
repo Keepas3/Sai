@@ -100,14 +100,36 @@ export default function LibraryPage() {
         {/* --- STRUCTURED RECTANGULAR DASHBOARD TABS --- */}
 {/* --- STRUCTURED RECTANGULAR DASHBOARD TABS (INLINE STYLED) --- */}
 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '4rem' }}>
-  <div style={{ 
-    display: 'flex', 
-    alignItems: 'center', 
-    borderRadius: '8px', 
-    backgroundColor: 'rgba(255, 255, 255, 0.03)', 
-    border: '1px solid rgba(255, 255, 255, 0.1)', 
-    padding: '4px' 
-  }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            borderRadius: '8px', 
+            backgroundColor: 'rgba(255, 255, 255, 0.03)', 
+            border: '1px solid rgba(255, 255, 255, 0.1)', 
+            padding: '4px',
+            position: 'relative' /* 👈 NEW: Anchors the absolute Tetris button to this box */
+          }}>
+            
+            {/* --- NEW: TETRIS EASTER EGG BUTTON --- */}
+           {/* --- REFINED TETRIS EASTER EGG (TINY & BLENDED) --- */}
+            <button
+            onClick={() => console.log("Tetris route coming soon!")}
+            className="absolute -left-5 top-1/2 -translate-y-1/2 z-10 cursor-pointer group transition-all duration-500 outline-none border-none bg-transparent p-0"
+            title="Play Tetris (Coming Soon!)"
+          >
+            <img
+              src="/Tetrist.png"
+              alt="Tetris Easter Egg"
+              // We add !important to the class just in case, but the inline style below is the real fix
+              className="opacity-10 group-hover:opacity-60 transition-all duration-500 drop-shadow-md group-hover:drop-shadow-[0_0_8px_rgba(229,114,159,0.8)]"
+              style={{ 
+                width: '30px',     // Forces it to be exactly 12px wide
+                height: '30px',    // Forces it to be exactly 12px tall
+                objectFit: 'contain',
+                transform: 'rotate(320deg)' 
+              }}
+            />
+          </button>
     
       {/* Tab A: Games */}
     <button
