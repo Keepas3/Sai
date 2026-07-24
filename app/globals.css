@@ -986,20 +986,23 @@
     .gallery-control-btn.left { left: 8px; }
     .gallery-control-btn.right { right: 8px; }
 }
+
 /* ==========================================================================
    FOOTER SECTION
    ========================================================================== */
 .site-footer {
     width: 100%;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
-    background: rgba(17, 20, 36, 0.65);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    padding: 2.5rem 0;
+    
+    /* UPDATED: 4rem padding on top for the quote, 1.5rem on bottom for the copyright */
+    padding: 1.75rem 0; 
+    
     position: relative;
     z-index: 100;
-    background: rgba(30, 15, 25, 0.5); /* Very dark purple/pink, 50% solid */
-    margin-top: auto; /* Pushes the footer to the bottom of the page */
+    background: rgba(30, 15, 25, 0.5); 
+    margin-top: auto; 
 }
 
 .footer-content {
@@ -1007,33 +1010,15 @@
     margin: 0 auto;
     padding: 0 2rem;
     display: flex;
-    justify-content: space-between;
+    
+    /* UPDATED: Stacks elements vertically and centers them */
+    flex-direction: column; 
+    justify-content: center;
     align-items: center;
-    flex-wrap: wrap; /* Allows it to stack on mobile phones */
-    gap: 1.5rem;
-}
-
-.footer-basics {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-}
-
-.footer-name {
-    color: rgba(255, 255, 255, 0.9);
-    font-weight: 600;
-    font-size: 1rem;
-}
-
-.footer-tagline {
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 0.85rem;
-}
-
-.footer-socials {
-    display: flex;
-    gap: 1.25rem;
-    align-items: center;
+    text-align: center;
+    
+    /* UPDATED: Creates a large, clean gap between the quote and copyright */
+    gap: 3.5rem; 
 }
 
 .social-link {
