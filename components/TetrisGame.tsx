@@ -79,7 +79,7 @@ const MiniPiece = ({ type }: { type: number | null }) => {
 
 export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const requestRef = useRef<number>();
+  const requestRef = useRef<number>(0);
   
   const board = useRef<number[][]>(createMatrix(COLS, ROWS));
   const dropCounter = useRef(0);
