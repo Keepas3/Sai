@@ -81,7 +81,7 @@ export default async function Home() {
       ) | order(weight asc)[0..1]
     },
     
-    "categories": *[_type == "category" && defined(slug.current)][0..2] {
+    "categories": *[_type == "category" && defined(slug.current)][0..3] {
       title,
       description,
       "slug": slug.current
