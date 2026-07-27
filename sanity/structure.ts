@@ -77,6 +77,14 @@ export const structure: StructureResolver = (S) =>
           S.documentTypeList('galleryTopic')
             .title('Albums & Archives')
         ),
+
+        S.listItem()
+        .title('Now Playing Track')
+        .schemaType('nowPlaying')
+        .child(
+          S.documentTypeList('nowPlaying')
+            .title('Now Playing Track')
+        ),
         // 6. Footer Settings
         S.listItem()
         .title('Footer Settings')
@@ -85,5 +93,6 @@ export const structure: StructureResolver = (S) =>
           S.documentTypeList('footerSettings')
             .title('Footer Settings')
         ),
-    
+        
+      
     ])

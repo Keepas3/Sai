@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Comfortaa } from "next/font/google";
 
+// IMPORT YOUR SANITY CLIENT HERE (Adjust path if needed!)
+import { client } from "@/sanity/lib/client"; 
+
 import SakuraCanvas from "@/components/sai";
 import Footer from '@/components/Footer' 
+import { AudioProvider, TrackData } from '@/components/AudioContext';
+import NowPlayingWidget from '@/components/NowPlayingWidget';
 
 const comfortaa = Comfortaa({
   subsets: ["latin"],
@@ -15,22 +20,38 @@ export const metadata: Metadata = {
   description: "Read Umineko (also Mudkip is the GOAT)",
 };
 
-export default function RootLayout({
+// 1. Add the Sanity Query
+const NOW_PLAYING_QUERY = `*[_type == "nowPlaying"][0]{
+  title,
+  artist,
+  "audioUrl": audioFile.asset->url,
+  loopStart,
+  loopEnd
+}`;
+
+// 2. Make the layout async so we can fetch data securely on the server
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  
+  // 3. Fetch the track data from Sanity
+  const track: TrackData | null = await client.fetch(NOW_PLAYING_QUERY);
+
   return (
     <html lang="en" className={`scroll-smooth ${comfortaa.variable}`}>
-      {/* 1. Added "flex flex-col" here to stack the page vertically */}
       <body className="bg-[#111424] text-white antialiased min-h-screen relative overflow-x-hidden flex flex-col">
         
-        <SakuraCanvas />
+        {/* 4. Pass the fetched track data instead of 'null' */}
+        <AudioProvider track={track}>
+          <SakuraCanvas />
+          <div className="flex-1 w-full">
+            {children}
+          </div>
+          <NowPlayingWidget />
+        </AudioProvider>
         
-        {/* 2. Wrapped children in a flex-1 div. This forces the content to push the footer down! */}
-        <div className="flex-1 w-full">
-          {children}
-        </div>
         <Footer />
       </body>
     </html>

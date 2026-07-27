@@ -87,11 +87,11 @@ export default function SakuraCanvas() {
                 
                 this.opacity = depth; 
                 this.speedY = (Math.random() * 2 + 1.5) * depth;
-                this.speedX = Math.random() * 1.2 - 0.2;
+                this.speedX = Math.random() * 2.5 - 0.2;
                 
                 this.angle = Math.random() * Math.PI * 2;
-                this.spinSpeed = Math.random() * 0.01 - 0.005;
-                this.flipSpeed = Math.random() * 0.02 + 0.005;
+                this.spinSpeed = Math.random() * 0.025 - 0.005;
+                this.flipSpeed = Math.random() * 0.025 + 0.005;
                 this.flip = Math.random() * Math.PI;
             }
 

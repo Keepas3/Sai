@@ -2,9 +2,10 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { COLS, ROWS, BLOCK_SIZE, COLORS, PIECES } from './tetrisConstants';
+import { supabase } from '../app/utils/supabaseClient'; 
 
 interface TetrisGameProps {
-  mode: string;
+  mode: string; 
   onMenu: () => void;
 }
 
@@ -12,13 +13,52 @@ interface ScoreEntry {
   name: string;
   score: number;
   level: number;
+  mode: string;
 }
 
 const MAX_LEADERBOARD = 8;
+const SPRINT_GOAL = 40;
+const BLITZ_TIME_LIMIT = 3 * 60 * 1000; // 3 minutes in milliseconds
 
 // ==========================================
-// 1. PURE ENGINE FUNCTIONS 
+// 1. PURE ENGINE FUNCTIONS
 // ==========================================
+
+export const formatTime = (ms: number) => {
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  const milliseconds = Math.floor(ms % 1000);
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
+};
+
+const calculateDropInterval = (level: number) => {
+  const speed = Math.pow(0.8 - ((level - 1) * 0.007), level - 1) * 1000;
+  return speed < 15 ? 0 : speed;
+};
+
+const WALL_KICKS: Record<string, {x: number, y: number}[]> = {
+  '0-1': [{x:0,y:0}, {x:-1,y:0}, {x:-1,y:-1}, {x:0,y:2},  {x:-1,y:2}],
+  '1-0': [{x:0,y:0}, {x:1,y:0},  {x:1,y:1},   {x:0,y:-2}, {x:1,y:-2}],
+  '1-2': [{x:0,y:0}, {x:1,y:0},  {x:1,y:1},   {x:0,y:-2}, {x:1,y:-2}],
+  '2-1': [{x:0,y:0}, {x:-1,y:0}, {x:-1,y:-1}, {x:0,y:2},  {x:-1,y:2}],
+  '2-3': [{x:0,y:0}, {x:1,y:0},  {x:1,y:-1},  {x:0,y:2},  {x:1,y:2}],
+  '3-2': [{x:0,y:0}, {x:-1,y:0}, {x:-1,y:1},  {x:0,y:-2}, {x:-1,y:-2}],
+  '3-0': [{x:0,y:0}, {x:-1,y:0}, {x:-1,y:1},  {x:0,y:-2}, {x:-1,y:-2}],
+  '0-3': [{x:0,y:0}, {x:1,y:0},  {x:1,y:-1},  {x:0,y:2},  {x:1,y:2}],
+};
+
+const I_WALL_KICKS: Record<string, {x: number, y: number}[]> = {
+  '0-1': [{x:0,y:0}, {x:-2,y:0}, {x:1,y:0},  {x:-2,y:1},  {x:1,y:-2}],
+  '1-0': [{x:0,y:0}, {x:2,y:0},  {x:-1,y:0}, {x:2,y:-1},  {x:-1,y:2}],
+  '1-2': [{x:0,y:0}, {x:-1,y:0}, {x:2,y:0},  {x:-1,y:-2}, {x:2,y:1}],
+  '2-1': [{x:0,y:0}, {x:1,y:0},  {x:-2,y:0}, {x:1,y:2},   {x:-2,y:-1}],
+  '2-3': [{x:0,y:0}, {x:2,y:0},  {x:-1,y:0}, {x:2,y:-1},  {x:-1,y:2}],
+  '3-2': [{x:0,y:0}, {x:-2,y:0}, {x:1,y:0},  {x:-2,y:1},  {x:1,y:-2}],
+  '3-0': [{x:0,y:0}, {x:1,y:0},  {x:-2,y:0}, {x:1,y:2},   {x:-2,y:-1}],
+  '0-3': [{x:0,y:0}, {x:-1,y:0}, {x:2,y:0},  {x:-1,y:-2}, {x:2,y:1}],
+};
+
+const KICKS_180 = [{x:0, y:0}, {x:0, y:-1}, {x:-1, y:0}, {x:1, y:0}, {x:0, y:1}];
 
 const generateBag = () => {
   const bag = [1, 2, 3, 4, 5, 6, 7];
@@ -79,17 +119,25 @@ const MiniPiece = ({ type }: { type: number | null }) => {
 
 export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const timeDisplayRef = useRef<HTMLParagraphElement>(null);
   const requestRef = useRef<number>(0);
   
   const board = useRef<number[][]>(createMatrix(COLS, ROWS));
   const dropCounter = useRef(0);
-  const dropInterval = useRef(1000); 
+  const dropInterval = useRef(calculateDropInterval(1)); 
   const lastTime = useRef(0);
   
+  const gameStartTimeRef = useRef(0);
+  const elapsedTimeRef = useRef(0);
+
   const isLockingRef = useRef(false);
   const lockTimerRef = useRef(0);
+  const lastHardDropTimeRef = useRef(0);
   
-  const scoreRef = useRef(0);
+  const lockResetsRef = useRef(0);
+  const lowestYRef = useRef(0);
+
+  const scoreRef = useRef(0); 
   const linesRef = useRef(0);
   const levelRef = useRef(1);
   const lastMoveRef = useRef<'move' | 'rotate' | 'drop' | null>(null);
@@ -101,13 +149,17 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
   const holdPieceRef = useRef<number | null>(null);
   const canHoldRef = useRef(true);
 
-  // --- NEW: Game Flow & Leaderboard State ---
-  const [gameState, setGameState] = useState<'PLAYING' | 'NAME_ENTRY' | 'LEADERBOARD'>('PLAYING');
+  const player = useRef({ pos: { x: 0, y: 0 }, matrix: [] as number[][], type: 0, rotState: 0 });
+  
+  const [gameState, setGameState] = useState<'COUNTDOWN' | 'PLAYING' | 'NAME_ENTRY' | 'LEADERBOARD'>('COUNTDOWN');
   const gameStateRef = useRef(gameState);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
+  const [countdownText, setCountdownText] = useState<number | string>(3);
+
   const [leaderboard, setLeaderboard] = useState<ScoreEntry[]>([]);
   const [nameInput, setNameInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [isPaused, setIsPaused] = useState(false);
   const isPausedRef = useRef(false);
@@ -118,21 +170,46 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
   
   const [tuning, setTuning] = useState({ das: 170, arr: 30, dcd: 0, sdf: 30 });
   const tuningRef = useRef(tuning);
-  useEffect(() => { tuningRef.current = tuning; }, [tuning]);
-
+  
   const [controls, setControls] = useState({ 
     'Left': 'ArrowLeft', 'Right': 'ArrowRight', 'Down': 'ArrowDown', 
     'Rotate CW': 'ArrowUp', 'Rotate CCW': 'z', 'Rotate 180': 'a', 
     'Hard Drop': ' ', 'Hold': 'c' 
   });
   const controlsRef = useRef(controls);
-  useEffect(() => { controlsRef.current = controls; }, [controls]);
+  
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  const keysDown = useRef({ left: false, right: false, down: false });
+  useEffect(() => {
+    const savedTuning = localStorage.getItem('tetrisTuning');
+    const savedControls = localStorage.getItem('tetrisControls');
+    
+    if (savedTuning) {
+      try { setTuning(JSON.parse(savedTuning)); } catch (e) { console.error('Failed to parse tuning'); }
+    }
+    if (savedControls) {
+      try { setControls(JSON.parse(savedControls)); } catch (e) { console.error('Failed to parse controls'); }
+    }
+    setSettingsLoaded(true);
+  }, []);
+
+  useEffect(() => { 
+    tuningRef.current = tuning; 
+    if (settingsLoaded) {
+      localStorage.setItem('tetrisTuning', JSON.stringify(tuning));
+    }
+  }, [tuning, settingsLoaded]);
+
+  useEffect(() => { 
+    controlsRef.current = controls; 
+    if (settingsLoaded) {
+      localStorage.setItem('tetrisControls', JSON.stringify(controls));
+    }
+  }, [controls, settingsLoaded]);
+
+  const keysDown = useRef({ left: false, right: false, down: false, hardDrop: false });
   const dasTimers = useRef({ das: 0, arr: 0, dcd: 0 });
 
-  const player = useRef({ pos: { x: 0, y: 0 }, matrix: [] as number[][], type: 0 });
-  
   const [uiState, setUiState] = useState({ 
     score: 0, lines: 0, level: 1, next: nextPiecesRef.current.slice(0, 5), hold: null as number | null, actionText: '' 
   });
@@ -144,28 +221,81 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     });
   };
 
-  // --- NEW: Load Leaderboard on Mount ---
   useEffect(() => {
-    const saved = localStorage.getItem('tetrisLeaderboard');
-    if (saved) {
-      try { setLeaderboard(JSON.parse(saved)); } catch (e) { console.error('Failed to load leaderboard'); }
+    if (gameState === 'COUNTDOWN') {
+      setCountdownText(3);
+      let count = 3;
+      const interval = setInterval(() => {
+        count -= 1;
+        if (count > 0) {
+          setCountdownText(count);
+        } else if (count === 0) {
+          setCountdownText('GO!');
+        } else {
+          clearInterval(interval);
+          gameStartTimeRef.current = 0; 
+          setGameState('PLAYING');
+        }
+      }, 1000);
+      return () => clearInterval(interval);
     }
-  }, []);
+  }, [gameState]);
 
-  const saveHighScore = () => {
-    const newEntry: ScoreEntry = { 
-      name: nameInput.trim() || 'AAA', 
-      score: scoreRef.current, 
-      level: levelRef.current 
-    };
-    
-    const newLeaderboard = [...leaderboard, newEntry]
-      .sort((a, b) => b.score - a.score)
+  const fetchLeaderboard = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tetris_scores')
+        .select('name, score, level, mode')
+        .eq('mode', mode) 
+        .order('score', { ascending: mode === 'sprint' }) 
+        .limit(MAX_LEADERBOARD);
+
+      if (error) {
+        console.error('Supabase fetch error:', error.message);
+      } else if (data) {
+        setLeaderboard(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch scores:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, [mode]);
+
+  const saveHighScore = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
+    const name = nameInput.trim() || 'AAA';
+    const score = Math.floor(scoreRef.current);
+    const level = levelRef.current;
+
+    const newEntry: ScoreEntry = { name, score, level, mode };
+
+    const updatedLocal = [...leaderboard, newEntry]
+      .sort((a, b) => mode === 'sprint' ? a.score - b.score : b.score - a.score)
       .slice(0, MAX_LEADERBOARD);
-      
-    setLeaderboard(newLeaderboard);
-    localStorage.setItem('tetrisLeaderboard', JSON.stringify(newLeaderboard));
+
+    setLeaderboard(updatedLocal);
     setGameState('LEADERBOARD');
+
+    try {
+      const { error } = await supabase
+        .from('tetris_scores')
+        .insert([{ name, score, level, mode }]);
+
+      if (error) {
+        console.error('Supabase insert error:', error.message);
+      } else {
+        await fetchLeaderboard(); 
+      }
+    } catch (err) {
+      console.error('Failed to submit score:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isTSpin = () => {
@@ -181,6 +311,29 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     return corners >= 3;
   };
 
+  const handleGameOver = (isWin: boolean) => {
+    const currentScore = mode === 'sprint' ? elapsedTimeRef.current : scoreRef.current;
+    scoreRef.current = currentScore; 
+
+    if (mode === 'sprint' && !isWin) {
+      setGameState('LEADERBOARD');
+      syncUi();
+      return;
+    }
+
+    const isHighScore = leaderboard.length < MAX_LEADERBOARD || 
+      (mode === 'sprint' 
+        ? currentScore < (leaderboard[leaderboard.length - 1]?.score || Infinity)
+        : currentScore > (leaderboard[leaderboard.length - 1]?.score || 0));
+    
+    if (isHighScore && currentScore > 0) {
+      setGameState('NAME_ENTRY');
+    } else {
+      setGameState('LEADERBOARD');
+    }
+    syncUi();
+  };
+
   const playerReset = () => {
     player.current.type = nextPiecesRef.current.shift()!;
     if (nextPiecesRef.current.length <= 5) nextPiecesRef.current.push(...generateBag());
@@ -188,7 +341,11 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     player.current.matrix = PIECES[player.current.type];
     player.current.pos.y = 0;
     player.current.pos.x = Math.floor(COLS / 2) - Math.floor(player.current.matrix[0].length / 2);
+    player.current.rotState = 0; 
     
+    lowestYRef.current = player.current.pos.y;
+    lockResetsRef.current = 0;
+
     canHoldRef.current = true;
     isLockingRef.current = false;
     lockTimerRef.current = 0;
@@ -198,21 +355,15 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     syncUi();
 
     if (collide(board.current, player.current)) {
-      // --- NEW: Game Over Check & Transition ---
-      const isHighScore = leaderboard.length < MAX_LEADERBOARD || scoreRef.current > (leaderboard[leaderboard.length - 1]?.score || 0);
-      
-      if (isHighScore && scoreRef.current > 0) {
-        setGameState('NAME_ENTRY');
-      } else {
-        setGameState('LEADERBOARD');
-      }
+      handleGameOver(false);
     }
   };
 
-  // --- NEW: Restart logic isolated so it doesn't trigger instant game overs ---
   const restartGame = () => {
     board.current = createMatrix(COLS, ROWS);
-    scoreRef.current = 0; linesRef.current = 0; levelRef.current = 1; holdPieceRef.current = null; dropInterval.current = 1000;
+    scoreRef.current = 0; linesRef.current = 0; levelRef.current = 1; holdPieceRef.current = null; 
+    dropInterval.current = calculateDropInterval(1);
+    
     comboRef.current = -1; b2bRef.current = false; actionTextRef.current = {text: '', timer: 0};
     nextPiecesRef.current = [...generateBag(), ...generateBag()];
     
@@ -220,9 +371,21 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     player.current.matrix = PIECES[player.current.type];
     player.current.pos.y = 0;
     player.current.pos.x = Math.floor(COLS / 2) - Math.floor(player.current.matrix[0].length / 2);
+    player.current.rotState = 0;
     
+    lowestYRef.current = player.current.pos.y;
+    lockResetsRef.current = 0;
+
+    gameStartTimeRef.current = 0;
+    elapsedTimeRef.current = 0;
+    
+    if (timeDisplayRef.current) {
+        if (mode === 'blitz') timeDisplayRef.current.innerText = '03:00.000';
+        else if (mode === 'sprint') timeDisplayRef.current.innerText = '00:00.000';
+    }
+
     setNameInput('');
-    setGameState('PLAYING');
+    setGameState('COUNTDOWN');
     syncUi();
   };
 
@@ -275,16 +438,25 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
         actionStr += `\n${comboRef.current} Combo`;
       }
 
-      scoreRef.current += calculatedScore;
+      if (mode !== 'sprint') {
+        scoreRef.current += calculatedScore;
+      }
+      
       linesRef.current += linesCleared;
       levelRef.current = Math.floor(linesRef.current / 10) + 1; 
-      dropInterval.current = Math.max(100, 1000 - (levelRef.current - 1) * 100); 
+      dropInterval.current = calculateDropInterval(levelRef.current);
       
       if (actionStr) actionTextRef.current = { text: actionStr, timer: 2000 };
+
+      if (mode === 'sprint' && linesRef.current >= SPRINT_GOAL) {
+         handleGameOver(true);
+         return;
+      }
+
     } else {
       comboRef.current = -1;
       if (tSpin) {
-        scoreRef.current += 400 * levelRef.current;
+        if (mode !== 'sprint') scoreRef.current += 400 * levelRef.current;
         actionTextRef.current = { text: 'T-SPIN', timer: 1500 };
       }
     }
@@ -312,15 +484,19 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
       }
       droppedThisFrame++;
     }
-    if (isSoftDrop && droppedThisFrame > 0) {
+    if (isSoftDrop && droppedThisFrame > 0 && mode !== 'sprint') {
       scoreRef.current += droppedThisFrame; 
       syncUi();
     }
   };
 
   const hardDrop = () => {
+    const now = performance.now();
+    if (now - lastHardDropTimeRef.current < 100) return; 
+    lastHardDropTimeRef.current = now;
+
     const dist = getGhostY() - player.current.pos.y;
-    scoreRef.current += dist * 2; 
+    if (mode !== 'sprint') scoreRef.current += dist * 2; 
     player.current.pos.y += dist; 
     lastMoveRef.current = 'drop';
     lockPiece(); 
@@ -333,32 +509,79 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
       return false; 
     } else {
       lastMoveRef.current = 'move';
-      if (isLockingRef.current) lockTimerRef.current = 0;
+      if (isLockingRef.current) {
+        if (lockResetsRef.current < 15) {
+          lockTimerRef.current = 0;
+          lockResetsRef.current++;
+        }
+      }
       return true; 
     }
   };
 
   const playerRotate = (dir: number) => {
-    const pos = player.current.pos.x;
-    let offset = 1;
-    
-    if (dir === 2) player.current.matrix = rotate(rotate(player.current.matrix, 1), 1);
-    else player.current.matrix = rotate(player.current.matrix, dir);
-    
-    while (collide(board.current, player.current)) {
-      player.current.pos.x += offset; 
-      offset = -(offset + (offset > 0 ? 1 : -1));
-      
-      if (offset > player.current.matrix[0].length) {
-        if (dir === 2) player.current.matrix = rotate(rotate(player.current.matrix, -1), -1);
-        else player.current.matrix = rotate(player.current.matrix, -dir); 
-        
-        player.current.pos.x = pos; 
-        return;
-      }
+    const originalMatrix = player.current.matrix;
+    const originalPos = { ...player.current.pos };
+    const originalRotState = player.current.rotState;
+
+    let nextState = originalRotState;
+    if (dir === 1) nextState = (originalRotState + 1) % 4; 
+    else if (dir === -1) nextState = (originalRotState + 3) % 4; 
+    else if (dir === 2) nextState = (originalRotState + 2) % 4; 
+
+    if (dir === 2) {
+      player.current.matrix = rotate(rotate(player.current.matrix, 1), 1);
+    } else {
+      player.current.matrix = rotate(player.current.matrix, dir);
     }
-    lastMoveRef.current = 'rotate';
-    if (isLockingRef.current) lockTimerRef.current = 0;
+
+    if (player.current.matrix.length === 2) {
+       if (!collide(board.current, player.current)) {
+           player.current.rotState = nextState;
+           lastMoveRef.current = 'rotate';
+           if (isLockingRef.current) {
+             if (lockResetsRef.current < 15) {
+               lockTimerRef.current = 0;
+               lockResetsRef.current++;
+             }
+           }
+       } else {
+           player.current.matrix = originalMatrix;
+       }
+       return;
+    }
+
+    let kicks = [{x: 0, y: 0}];
+    if (dir === 2) {
+        kicks = KICKS_180;
+    } else {
+        const key = `${originalRotState}-${nextState}`;
+        if (player.current.matrix.length === 4) {
+           kicks = I_WALL_KICKS[key] || [{x: 0, y: 0}];
+        } else {
+           kicks = WALL_KICKS[key] || [{x: 0, y: 0}];
+        }
+    }
+
+    for (let i = 0; i < kicks.length; i++) {
+        player.current.pos.x = originalPos.x + kicks[i].x;
+        player.current.pos.y = originalPos.y + kicks[i].y;
+        
+        if (!collide(board.current, player.current)) {
+            player.current.rotState = nextState;
+            lastMoveRef.current = 'rotate';
+            if (isLockingRef.current) {
+              if (lockResetsRef.current < 15) {
+                lockTimerRef.current = 0;
+                lockResetsRef.current++;
+              }
+            }
+            return;
+        }
+    }
+
+    player.current.matrix = originalMatrix;
+    player.current.pos = originalPos;
   };
 
   const holdPiece = () => {
@@ -368,6 +591,11 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     } else {
       const temp = player.current.type; player.current.type = holdPieceRef.current; player.current.matrix = PIECES[player.current.type];
       holdPieceRef.current = temp; player.current.pos.y = 0; player.current.pos.x = Math.floor(COLS / 2) - Math.floor(player.current.matrix[0].length / 2);
+      player.current.rotState = 0; 
+      
+      lowestYRef.current = player.current.pos.y;
+      lockResetsRef.current = 0;
+
       canHoldRef.current = false; 
       isLockingRef.current = false;
       lockTimerRef.current = 0;
@@ -419,9 +647,29 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     const deltaTime = time - lastTime.current;
     lastTime.current = time;
 
-    // Only progress logic if actually playing
     if (gameStateRef.current === 'PLAYING') {
       
+      if (gameStartTimeRef.current === 0) {
+        gameStartTimeRef.current = time;
+      }
+      
+      if (!isPausedRef.current && !showControlsRef.current) {
+        elapsedTimeRef.current = time - gameStartTimeRef.current;
+        
+        if (mode === 'sprint' && timeDisplayRef.current) {
+           timeDisplayRef.current.innerText = formatTime(elapsedTimeRef.current);
+        } else if (mode === 'blitz' && timeDisplayRef.current) {
+           // --- NEW: BLITZ TIMER LOGIC ---
+           const timeLeft = Math.max(0, BLITZ_TIME_LIMIT - elapsedTimeRef.current);
+           timeDisplayRef.current.innerText = formatTime(timeLeft);
+           
+           if (timeLeft === 0) {
+              handleGameOver(true);
+              return; // Halt the update loop
+           }
+        }
+      }
+
       if (actionTextRef.current.timer > 0) {
         actionTextRef.current.timer -= deltaTime;
         if (actionTextRef.current.timer <= 0) {
@@ -460,7 +708,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
            if (tuningRef.current.sdf >= 41) {
               const dist = getGhostY() - player.current.pos.y;
               if (dist > 0) {
-                scoreRef.current += dist; 
+                if (mode !== 'sprint') scoreRef.current += dist; 
                 player.current.pos.y += dist; 
                 lastMoveRef.current = 'drop';
                 syncUi(); 
@@ -473,6 +721,11 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
            dropCounter.current += deltaTime;
         }
 
+        if (player.current.pos.y > lowestYRef.current) {
+           lowestYRef.current = player.current.pos.y;
+           lockResetsRef.current = 0; 
+        }
+
         player.current.pos.y++;
         const isSupported = collide(board.current, player.current);
         player.current.pos.y--;
@@ -480,13 +733,15 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
         if (isSupported) {
           isLockingRef.current = true;
           lockTimerRef.current += deltaTime;
-          const currentLockDelay = Math.max(150, 500 - (levelRef.current - 1) * 25);
-          if (lockTimerRef.current >= currentLockDelay) lockPiece();
+          if (lockTimerRef.current >= 500) lockPiece();
         } else {
           isLockingRef.current = false;
           lockTimerRef.current = 0;
           
-          if (dropCounter.current > dropInterval.current) {
+          if (dropInterval.current <= 0) {
+             player.current.pos.y = getGhostY();
+             dropCounter.current = 0;
+          } else if (dropCounter.current > dropInterval.current) {
             const drops = Math.floor(dropCounter.current / dropInterval.current);
             const isSoftDrop = keysDown.current.down && tuningRef.current.sdf < 41;
             playerDrop(drops, isSoftDrop);
@@ -512,12 +767,12 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     requestRef.current = requestAnimationFrame(update);
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // --- Prevent Game Keys from firing if typing a name or viewing Leaderboard ---
       if (gameStateRef.current !== 'PLAYING') return;
 
       if (listeningActionRef.current) {
         e.preventDefault();
-        setControls(prev => ({ ...prev, [listeningActionRef.current!]: e.key }));
+        const targetAction = listeningActionRef.current;
+        setControls(prev => ({ ...prev, [targetAction]: e.key }));
         listeningActionRef.current = null;
         setListeningAction(null);
         return;
@@ -560,16 +815,23 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
       else if (e.key === c['Rotate CW']) playerRotate(1);
       else if (e.key === c['Rotate CCW']) playerRotate(-1);
       else if (e.key === c['Rotate 180']) playerRotate(2);
-      else if (e.key === c['Hard Drop']) hardDrop();
+      else if (e.key === c['Hard Drop']) {
+        if (!keysDown.current.hardDrop) {
+            keysDown.current.hardDrop = true;
+            hardDrop();
+        }
+      }
       else if (e.key === c['Hold']) holdPiece();
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (gameStateRef.current !== 'PLAYING') return;
       const c = controlsRef.current;
+      
       if (e.key === c['Left']) keysDown.current.left = false;
       if (e.key === c['Right']) keysDown.current.right = false;
       if (e.key === c['Down']) keysDown.current.down = false;
+      if (e.key === c['Hard Drop']) keysDown.current.hardDrop = false;
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -594,10 +856,11 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
             </div>
           </div>
           
-          {gameState === 'PLAYING' && (
+          {(gameState === 'PLAYING' || gameState === 'COUNTDOWN') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1.5rem' }}>
               <button 
                 onClick={() => { 
+                  if (gameState === 'COUNTDOWN') return; 
                   const willShow = !showControlsRef.current;
                   showControlsRef.current = willShow;
                   setShowControls(willShow); 
@@ -622,11 +885,24 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
         <canvas ref={canvasRef} width={300} height={600} style={{ display: 'block' }} />
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', backgroundImage: 'linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px)', backgroundSize: '100% 4px' }} />
 
+        {/* COUNTDOWN OVERLAY */}
+        {gameState === 'COUNTDOWN' && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+            <h2 style={{ color: '#e5729f', fontSize: '5rem', fontWeight: 'bold', textShadow: '0 0 20px rgba(229,114,159,0.8)', margin: 0, letterSpacing: '0.1em', animation: 'pop 0.3s ease-out' }}>
+              {countdownText}
+            </h2>
+          </div>
+        )}
+
         {/* HIGH SCORE ENTRY OVERLAY */}
         {gameState === 'NAME_ENTRY' && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 30, padding: '2rem' }}>
-             <h3 style={{ color: '#e5729f', letterSpacing: '0.1em', marginBottom: '1rem', marginTop: 0, fontSize: '1.25rem', textAlign: 'center' }}>NEW HIGH SCORE!</h3>
-             <p style={{ color: 'white', marginBottom: '2rem', fontSize: '2rem', fontWeight: 'bold', textShadow: '0 0 10px rgba(255,255,255,0.5)', margin: '0 0 2rem 0' }}>{uiState.score}</p>
+             <h3 style={{ color: '#e5729f', letterSpacing: '0.1em', marginBottom: '1rem', marginTop: 0, fontSize: '1.25rem', textAlign: 'center' }}>
+               {mode === 'sprint' ? 'NEW BEST TIME!' : 'NEW HIGH SCORE!'}
+             </h3>
+             <p style={{ color: 'white', marginBottom: '2rem', fontSize: '2rem', fontWeight: 'bold', textShadow: '0 0 10px rgba(255,255,255,0.5)', margin: '0 0 2rem 0' }}>
+               {mode === 'sprint' ? formatTime(uiState.score) : uiState.score}
+             </p>
              
              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>Enter Initials</p>
              <input 
@@ -637,8 +913,8 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
                onKeyDown={(e) => { if (e.key === 'Enter') saveHighScore(); }}
                style={{ backgroundColor: 'transparent', border: 'none', borderBottom: '2px solid #e5729f', color: 'white', fontSize: '2.5rem', width: '6rem', textAlign: 'center', textTransform: 'uppercase', outline: 'none', fontFamily: 'monospace', letterSpacing: '0.2em', padding: '0 0 0.5rem 0' }}
              />
-             <button onClick={saveHighScore} style={{ marginTop: '2.5rem', backgroundColor: '#e5729f', color: 'white', border: 'none', borderRadius: '4px', padding: '10px 32px', cursor: 'pointer', textTransform: 'uppercase', fontSize: '14px', letterSpacing: '0.1em', fontWeight: 'bold' }}>
-               Save
+             <button disabled={isSubmitting} onClick={saveHighScore} style={{ marginTop: '2.5rem', backgroundColor: '#e5729f', color: 'white', border: 'none', borderRadius: '4px', padding: '10px 32px', cursor: 'pointer', textTransform: 'uppercase', fontSize: '14px', letterSpacing: '0.1em', fontWeight: 'bold', opacity: isSubmitting ? 0.5 : 1 }}>
+               {isSubmitting ? 'Saving...' : 'Save'}
              </button>
           </div>
         )}
@@ -659,7 +935,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
                       <span style={{ color: i === 0 ? 'white' : 'rgba(255,255,255,0.8)', fontSize: '14px', fontWeight: 'bold', letterSpacing: '0.1em' }}>{entry.name}</span>
                     </div>
                     <span style={{ color: i === 0 ? '#e5729f' : 'white', fontSize: '14px', fontFamily: 'monospace', textShadow: i === 0 ? '0 0 8px rgba(229,114,159,0.5)' : 'none' }}>
-                      {entry.score}
+                      {mode === 'sprint' ? formatTime(entry.score) : entry.score}
                     </span>
                  </div>
               ))}
@@ -684,14 +960,16 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
         )}
 
         {/* SETTINGS OVERLAY */}
-        {showControls && gameState === 'PLAYING' && (
+        {showControls && (gameState === 'PLAYING' || gameState === 'COUNTDOWN') && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20, padding: '2rem 1.5rem', overflowY: 'auto' }}>
             
             <h3 style={{ color: 'white', letterSpacing: '0.2em', marginBottom: '1.2rem', marginTop: 0, fontSize: '1.1rem' }}>SETTINGS</h3>
             
             <p style={{ color: '#e5729f', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 0.75rem 0', alignSelf: 'flex-start' }}>Keybinds</p>
             <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '1.5rem' }}>
-              {Object.entries(controls).map(([action, keyName]) => (
+              {Object.entries(controls)
+                .filter(([action]) => action !== 'null') 
+                .map(([action, keyName]) => (
                 <div key={action} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                   <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '9px', textTransform: 'uppercase', textAlign: 'center' }}>
                     {action}
@@ -770,18 +1048,56 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
         </div>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem', paddingRight: '0.5rem', textAlign: 'right', flex: 1 }}>
-          <div>
-            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Score</p>
-            <p style={{ fontSize: '1.25rem', color: '#e5729f', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.5)', margin: 0 }}>{uiState.score}</p>
-          </div>
-          <div>
-            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Level</p>
-            <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0 }}>{uiState.level}</p>
-          </div>
-          <div>
-            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines</p>
-            <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0 }}>{uiState.lines}</p>
-          </div>
+          
+          {/* --- UI RENDER BRANCHING --- */}
+          {mode === 'sprint' ? (
+            <>
+              <div>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Time</p>
+                <p ref={timeDisplayRef} style={{ fontSize: '1.125rem', color: '#e5729f', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.5)', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                  00:00.000
+                </p>
+              </div>
+              <div>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines Left</p>
+                <p style={{ fontSize: '1.25rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0 }}>
+                  {Math.max(0, SPRINT_GOAL - uiState.lines)}
+                </p>
+              </div>
+            </>
+          ) : mode === 'blitz' ? (
+            <>
+              <div>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Score</p>
+                <p style={{ fontSize: '1.25rem', color: '#e5729f', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.5)', margin: 0 }}>{uiState.score}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Time Left</p>
+                <p ref={timeDisplayRef} style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                  03:00.000
+                </p>
+              </div>
+              <div>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines</p>
+                <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0 }}>{uiState.lines}</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Score</p>
+                <p style={{ fontSize: '1.25rem', color: '#e5729f', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.5)', margin: 0 }}>{uiState.score}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Level</p>
+                <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0 }}>{uiState.level}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines</p>
+                <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0 }}>{uiState.lines}</p>
+              </div>
+            </>
+          )}
           
           <div style={{ marginTop: 'auto', minHeight: '4rem', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
             {uiState.actionText && (

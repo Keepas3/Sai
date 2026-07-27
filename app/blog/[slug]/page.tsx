@@ -81,6 +81,29 @@ const blogComponents: PortableTextComponents = {
         {children}
       </code>
     ),
+    
+    // ─── UPDATED: INLINE GLASSY BLUE LINK RENDERER ───
+    // ─── UPDATED: FOOLPROOF GLASSY BLUE LINK RENDERER ───
+    link: ({ children, value }) => {
+      const rel = !value?.href?.startsWith('/') ? 'noreferrer noopener' : undefined;
+      const target = !value?.href?.startsWith('/') ? '_blank' : undefined;
+      
+      return (
+        <a 
+          href={value?.href} 
+          rel={rel} 
+          target={target}
+          className="glass-link-btn"
+        >
+          <span className="glass-link-text">
+            {children}
+          </span>
+          <span className="glass-link-icon">
+            ⋮
+          </span>
+        </a>
+      );
+    },
   },
 };
 
@@ -158,7 +181,6 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             })}
           </p>
 
-          {/* ─── ADDED: OPTIONAL FEATURE COVER IMAGE BANNER ─── */}
           {post.mainImage && (
             <div 
               className="w-full overflow-hidden rounded-xl mb-8 bg-black/20"

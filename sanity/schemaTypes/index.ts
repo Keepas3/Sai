@@ -8,6 +8,7 @@ import {bookType} from './book'
 import project from './project'
 import galleryTopic from './galleryTopic'
 import galleryItem from './galleryItem'
+import nowPlaying from './nowPlaying'
 import footerSettings from './footer'
 
 
@@ -22,6 +23,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     project,
     galleryTopic,
     galleryItem,
+    nowPlaying,
     footerSettings,
   ],
 }

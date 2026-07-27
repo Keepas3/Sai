@@ -459,6 +459,115 @@
     }
 
     /* ==========================================================================
+   LINKTREE-STYLE PORTABLE TEXT BUTTONS
+   ========================================================================== */
+.linktree-button {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 550px;
+    margin: 1.5rem auto !important; /* Centers the button and gives it breathing room */
+    padding: 1rem 1.5rem;
+    background-color: #f10b0b !important; /* Solid white background */
+    color: #000000 !important; /* Forces dark text */
+    font-weight: 700;
+    font-size: 0.95rem;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    border-radius: 12px; /* Matches the reference image rounding */
+    border: none !important;
+    outline: none !important;
+    text-decoration: none !important; /* Kills the blue underline */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease;
+    cursor: pointer;
+}
+
+.linktree-button:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 12px 25px rgba(229, 114, 159, 0.25); /* Subtle pink glow on hover */
+}
+
+.linktree-button-text {
+    flex: 1;
+    text-align: center;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 1rem;
+}
+
+.linktree-button-icon {
+    color: #000000;
+    opacity: 0.4;
+    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+/* ==========================================================================
+   GLASSY BLUE BLOG LINKS (FORCED OVERRIDE)
+   ========================================================================== */
+a.glass-link-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    max-width: 480px !important;
+    margin: 1.25rem auto !important;
+    padding: 12px 24px !important;
+    background-color: rgba(59, 130, 246, 0.15) !important;
+    border: 1px solid rgba(96, 165, 250, 0.3) !important;
+    border-radius: 12px !important;
+    text-decoration: none !important;
+    position: relative !important;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3) !important;
+    transition: all 0.3s ease !important;
+    cursor: pointer !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+}
+
+a.glass-link-btn:hover {
+    background-color: rgba(59, 130, 246, 0.3) !important;
+    border-color: rgba(96, 165, 250, 0.6) !important;
+    transform: translateY(-4px) !important;
+    box-shadow: 0 12px 25px rgba(59, 130, 246, 0.25) !important;
+}
+
+.glass-link-text {
+    color: #dbeafe !important; /* icy blue */
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    text-align: center !important;
+    width: 100% !important;
+    padding: 0 2rem !important;
+    transition: color 0.3s ease !important;
+}
+
+a.glass-link-btn:hover .glass-link-text {
+    color: #ffffff !important;
+}
+
+.glass-link-icon {
+    position: absolute !important;
+    right: 20px !important;
+    color: rgba(147, 197, 253, 0.6) !important;
+    font-size: 20px !important;
+    font-weight: bold !important;
+    transition: color 0.3s ease !important;
+}
+
+a.glass-link-btn:hover .glass-link-icon {
+    color: rgba(191, 219, 254, 1) !important;
+}
+
+    /* ==========================================================================
     CLEAN REFACTORED CHRONICLES TIMELINE INTERFACE
     ========================================================================== */
 
@@ -850,7 +959,7 @@
 .gallery-wrapper {
     position: relative;
     width: 100%;
-    max-width: 850px; /* Slimmed down slightly to keep images crisp */
+    max-width: 850px; 
     margin: 0 auto;
     display: flex;
     align-items: center;
@@ -865,35 +974,24 @@
     transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); 
 }
 
-/* Ensure the outer window adjusts its height naturally based on the current slide */
 .gallery-slide-window-dynamic {
-    width: fit-content !important;
-    
-    /* NEW: Enforces a minimum baseline size so the box never gets too tiny */
-    min-width: 400px !important; 
-    min-height: 400px !important; 
-    
+    /* 1. Remove strict sizing and backgrounds so it becomes an invisible mask */
+    width: 100% !important; 
     max-width: 85vw !important; 
-    max-height: 75vh !important;
     height: auto;
     overflow: hidden;
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: #0d0d0d;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+    background: transparent;
+    border: none;
+    box-shadow: none;
     transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
-    
-    /* NEW: Flex properties ensure that if the box is forced to its min-size, 
-       the track and images stay mathematically centered inside of it */
     display: flex;
     align-items: center;
 }
 
 .gallery-slide {
-    /* FIXED: Force the slide to take up exactly 100% of the dynamic window */
     min-width: 100%;
     width: 100%;
-    height: 100%;
+    height: auto;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -902,13 +1000,19 @@
 }
 
 .gallery-image {
-    width: 100% !important;
-    height: 100% !important;
-    /* FIXED: Ensures the image never overflows its minimum or maximum boundaries */
+    /* 2. Let the image define its own size naturally without stretching */
+    width: auto !important;
+    height: auto !important;
     max-width: 100% !important; 
-    max-height: 70vh !important; 
+    max-height: 75vh !important; 
     object-fit: contain;
     display: block;
+    
+    /* 3. Move the container styling directly onto the image so it hugs it perfectly */
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #0d0d0d;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
 }
 
 /* Glassmorphism Gallery Arrow Controls */
