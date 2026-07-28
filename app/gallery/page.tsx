@@ -1,22 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import { client } from '@/sanity/lib/client';
 
-// --- Interfaces ---
-// --- NEW Interfaces (Matches the nested array structure) ---
 interface GalleryItem {
   title: string;
   description?: string;
   url: string;
+  overlayVideoUrl?: string; 
+  overlayStyle?: 'fullscreen' | 'container'; // ◄ Added to interface
 }
 
 interface Topic {
   _id: string;
   title: string;
   description: string;
-  items: GalleryItem[]; // Images now live natively inside the topic
+  items: GalleryItem[]; 
 }
 
 export default function GalleryPage() {
@@ -27,7 +27,30 @@ export default function GalleryPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [albumIndex, setAlbumIndex] = useState(0);
 
-  // 2. Update GROQ query to pull the item description
+  const [overlayState, setOverlayState] = useState<'hidden' | 'visible' | 'fading'>('hidden');
+  const [activeOverlayVideo, setActiveOverlayVideo] = useState<string | null>(null);
+  
+  // ◄ NEW: Tracks the style choice from Sanity
+  const [activeOverlayStyle, setActiveOverlayStyle] = useState<'fullscreen' | 'container'>('fullscreen'); 
+
+  // --- The Silent Memory Bank ---
+  const playedVideosRef = useRef<Set<string>>(new Set());
+  const fullscreenVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const playFullscreenWithAudio = async () => {
+    const video = fullscreenVideoRef.current;
+    if (!video) return;
+
+    video.muted = false;
+    video.volume = 1;
+
+    try {
+      await video.play();
+    } catch (error) {
+      console.warn('Fullscreen video audio play was blocked until user interaction:', error);
+    }
+  };
+
   useEffect(() => {
     const fetchGalleryData = async () => {
       try {
@@ -38,8 +61,10 @@ export default function GalleryPage() {
             description,
             "items": coalesce(images[] {
               title,
-              description, // ◄ Pull the specific image caption here
-              "url": image.asset->url
+              description, 
+              "url": image.asset->url,
+              "overlayVideoUrl": overlayVideo.asset->url,
+              "overlayStyle": overlayStyle // ◄ Added to fetch query
             }, [])
           }
         `);
@@ -53,12 +78,10 @@ export default function GalleryPage() {
     fetchGalleryData();
   }, []);
 
-  // --- UPDATED Helper: Grabs the first image from the nested array ---
   const getTopicCover = (topic: Topic) => {
     return topic.items && topic.items.length > 0 ? topic.items[0].url : null;
   };
 
-  // --- Cover Flow Navigation Logic ---
   const numTopics = topics.length;
 
   const nextAlbum = () => setAlbumIndex(prev => (prev + 1) % numTopics);
@@ -73,7 +96,6 @@ export default function GalleryPage() {
     return offset;
   };
 
-  // --- Image Viewer Logic ---
   const activeTopic = topics.find(t => t._id === activeTopicId);
   const filteredSlides = activeTopic && activeTopic.items ? activeTopic.items : [];
 
@@ -84,7 +106,42 @@ export default function GalleryPage() {
     setActiveTopicId(topicId);
     setCurrentIndex(0); 
   };
-  const closeTopic = () => setActiveTopicId(null);
+  const closeTopic = () => {
+    setActiveTopicId(null);
+    setOverlayState('hidden'); 
+  };
+
+  // --- Smart Video Trigger Logic with Memory ---
+  useEffect(() => {
+    let triggerTimer: NodeJS.Timeout;
+
+    setOverlayState('hidden');
+    setActiveOverlayVideo(null);
+
+    const currentSlide = filteredSlides[currentIndex];
+    const videoUrl = currentSlide?.overlayVideoUrl;
+
+    if (videoUrl && !playedVideosRef.current.has(videoUrl)) {
+      triggerTimer = setTimeout(() => {
+        // ◄ Read the specific style for this picture (default to fullscreen if empty)
+        setActiveOverlayStyle(currentSlide.overlayStyle || 'fullscreen');
+        setActiveOverlayVideo(videoUrl);
+        setOverlayState('visible');
+        
+        playedVideosRef.current.add(videoUrl);
+      }, 1000); 
+    }
+
+    return () => {
+      clearTimeout(triggerTimer);
+    };
+  }, [currentIndex, activeTopicId, filteredSlides]);
+
+  useEffect(() => {
+    if (overlayState === 'visible' && activeOverlayVideo && activeOverlayStyle === 'fullscreen') {
+      void playFullscreenWithAudio();
+    }
+  }, [overlayState, activeOverlayVideo, activeOverlayStyle]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -114,7 +171,6 @@ export default function GalleryPage() {
   }
 
   return (
-    // FIXED: Ensured no overflow-hidden exists on the parent wrappers
     <div className="content-wrapper" style={{ overflow: 'visible' }}>
       <Navbar />
 
@@ -123,16 +179,12 @@ export default function GalleryPage() {
         <h1 className="page-title text-center mb-4">Gallery</h1>
 
         {!activeTopicId ? (
-          /* =========================================
-             VIEW 1: 3D COVER FLOW FAN CAROUSEL
-             ========================================= */
           <div className="albums-view animate-fade-in mt-2 flex flex-col items-center select-none w-full" style={{ overflow: 'visible' }}>
             <p className="text-center text-white/50 text-sm font-mono tracking-widest uppercase mb-10">Select an album to explore</p>
 
             {topics.length === 0 ? (
               <p className="text-center text-white/30 italic">No albums created yet.</p>
             ) : (
-              // ─── BULLETPROOF 3D CONTAINER ───
               <div style={{ 
                 position: 'relative', 
                 width: '100%', 
@@ -145,7 +197,6 @@ export default function GalleryPage() {
                 overflow: 'visible' 
               }}>
                 
-                {/* ─── FORCED ARROWS ─── */}
                 <button 
                   onClick={prevAlbum}
                   style={{
@@ -198,14 +249,12 @@ export default function GalleryPage() {
                   </svg>
                 </button>
 
-                {/* ─── MASSIVE COVER FLOW ITEMS ─── */}
                 {topics.map((topic, i) => {
                   const offset = getOffset(i);
                   const absOffset = Math.abs(offset);
                   const isFront = absOffset === 0;
                   
                   const sign = Math.sign(offset);
-                  // Adjusted math to push the giant cards wide enough apart
                   const translateX = sign * 340 + (sign * absOffset * 60); 
                   const translateZ = -absOffset * 300; 
                   const rotateY = sign * -25; 
@@ -223,7 +272,7 @@ export default function GalleryPage() {
                         flexDirection: 'column',
                         alignItems: 'center',
                         cursor: 'pointer',
-                        width: '630px', // Massive fixed width
+                        width: '630px', 
                         transition: 'all 0.7s cubic-bezier(0.25, 1, 0.5, 1)',
                         transform: `perspective(1200px) translateX(${translateX}px) translateZ(${translateZ}px) rotateY(${rotateY}deg)`,
                         zIndex: 50 - absOffset,
@@ -284,14 +333,9 @@ export default function GalleryPage() {
 
         ) : (
 
-          /* =========================================
-             VIEW 2: THE IMAGE GALLERY VIEWER
-             ========================================= */
           <div className="viewer-view animate-fade-in mt-4">
-            {/* Header / Sub-Nav Bar Container */}
-          <div className="flex items-center justify-between mb-8 px-4 w-full">
             
-            {/* Left Side: Back Button (Uses exact blog styling, but triggers closeTopic) */}
+          <div className="flex items-center justify-between mb-8 px-4 w-full">
             <div className="flex-1 flex justify-start">
               <button 
                 onClick={closeTopic}
@@ -304,14 +348,11 @@ export default function GalleryPage() {
               </button>
             </div>
 
-            {/* Center: Album Title */}
             <div className="flex-1 flex justify-center">
               <h2 className="text-xl md:text-3xl font-serif font-bold text-white tracking-wide drop-shadow-lg text-center m-0">
                 {activeTopic?.title}
               </h2>
             </div>
-
-            {/* Right Side: Spacer to keep the title perfectly centered */}
             <div className="flex-1"></div> 
           </div>
 
@@ -330,8 +371,54 @@ export default function GalleryPage() {
                       style={{ transform: `translateX(-${currentIndex * 100}%)` }}
                     >
                       {filteredSlides.map((slide, index) => (
-                        <div key={index} className="gallery-slide">
-                          <img src={slide.url} alt={slide.title} className="gallery-image" />
+                        <div key={index} className="gallery-slide" style={{ display: 'flex', justifyContent: 'center' }}>
+                          
+                          {/* ◄ NEW: Container for the localized overlay */}
+                          <div style={{ position: 'relative', display: 'inline-flex' }}>
+                            <img src={slide.url} alt={slide.title} className="gallery-image" />
+                            
+                            {/* STYLE 1: THE IN-BOX CONTAINER OVERLAY */}
+                            {currentIndex === index && overlayState !== 'hidden' && activeOverlayVideo && activeOverlayStyle === 'container' && (
+                              <div 
+                                style={{
+                                  position: 'absolute',
+                                  top: 0, left: 0, right: 0, bottom: 0,
+                                  zIndex: 50,
+                                  pointerEvents: 'none',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  opacity: overlayState === 'visible' ? 1 : 0,
+                                  transition: 'opacity 1s ease-in-out',
+                                  backgroundColor: overlayState === 'visible' ? 'rgba(0,0,0,0.5)' : 'transparent',
+                                  borderRadius: '16px', // Should match your CSS .gallery-image borders
+                                  overflow: 'hidden'
+                                }}
+                              >
+                                <video 
+                                  key={`container-vid-${currentIndex}`}
+                                  src={activeOverlayVideo} 
+                                  autoPlay
+                                  playsInline
+                                  
+                                  onEnded={() => {
+                                    setOverlayState('fading');
+                                    setTimeout(() => {
+                                      setOverlayState('hidden');
+                                      setActiveOverlayVideo(null);
+                                    }, 1000); 
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover',
+                                    opacity: 0.85
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+
                         </div>
                       ))}
                     </div>
@@ -345,7 +432,6 @@ export default function GalleryPage() {
                   {filteredSlides[currentIndex]?.title}
                 </h3>
                 
-                {/* ─── DISPLAY IMAGE DESCRIPTION ─── */}
                 {filteredSlides[currentIndex]?.description && (
                   <p className="text-white/50 text-xs font-mono mt-2 max-w-md mx-auto leading-relaxed">
                     {filteredSlides[currentIndex].description}
@@ -367,6 +453,55 @@ export default function GalleryPage() {
           </div>
         )}
       </main>
+
+      {/* =========================================
+          STYLE 2: THE GLOBAL FULL-SCREEN OVERLAY
+          ========================================= */}
+      {overlayState !== 'hidden' && activeOverlayVideo && activeOverlayStyle === 'fullscreen' && (
+        <div 
+          onClick={() => {
+            void playFullscreenWithAudio();
+          }}
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 999999, 
+            pointerEvents: 'auto', 
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: overlayState === 'visible' ? 1 : 0,
+            transition: 'opacity 1s ease-in-out', 
+            backgroundColor: overlayState === 'visible' ? 'rgba(0,0,0,0.5)' : 'transparent', 
+          }}
+        >
+          <video 
+            ref={fullscreenVideoRef}
+            key={`global-vid-${currentIndex}`}
+            src={activeOverlayVideo} 
+            autoPlay
+            playsInline
+            onLoadedData={() => {
+              void playFullscreenWithAudio();
+            }}
+            
+            onEnded={() => {
+              setOverlayState('fading');
+              setTimeout(() => {
+                setOverlayState('hidden');
+                setActiveOverlayVideo(null);
+              }, 1000); 
+            }}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              opacity: 0.85
+            }}
+          />
+        </div>
+      )}
+
     </div>
   );
 }

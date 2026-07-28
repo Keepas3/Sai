@@ -724,6 +724,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
         if (player.current.pos.y > lowestYRef.current) {
            lowestYRef.current = player.current.pos.y;
            lockResetsRef.current = 0; 
+           lockTimerRef.current = 0; // ◄ 1. ADD THIS: Only reset the timer when falling to a new depth
         }
 
         player.current.pos.y++;
@@ -736,7 +737,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
           if (lockTimerRef.current >= 500) lockPiece();
         } else {
           isLockingRef.current = false;
-          lockTimerRef.current = 0;
+          // ◄ 2. REMOVE the lockTimerRef.current = 0; that was here!
           
           if (dropInterval.current <= 0) {
              player.current.pos.y = getGhostY();
