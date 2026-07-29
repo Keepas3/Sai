@@ -85,6 +85,14 @@ export const structure: StructureResolver = (S) =>
           S.documentTypeList('nowPlaying')
             .title('Now Playing Track')
         ),
+
+        S.listItem()
+        .title('Gambling Fortune Slip')
+        .schemaType('fortuneSlip')
+        .child(
+          S.documentTypeList('fortuneSlip')
+            .title('Fortune Slip')
+        ),
         // 6. Footer Settings
         S.listItem()
         .title('Footer Settings')

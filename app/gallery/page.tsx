@@ -20,6 +20,8 @@ interface Topic {
 }
 
 export default function GalleryPage() {
+  const OVERLAY_TRIGGER_CHANCE = 0.30;  
+
   const [topics, setTopics] = useState<Topic[]>([]);
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -123,6 +125,11 @@ export default function GalleryPage() {
 
     if (videoUrl && !playedVideosRef.current.has(videoUrl)) {
       triggerTimer = setTimeout(() => {
+        const shouldTriggerOverlay = Math.random() < OVERLAY_TRIGGER_CHANCE;
+        if (!shouldTriggerOverlay) {
+          return;
+        }
+
         // ◄ Read the specific style for this picture (default to fullscreen if empty)
         setActiveOverlayStyle(currentSlide.overlayStyle || 'fullscreen');
         setActiveOverlayVideo(videoUrl);
@@ -135,7 +142,7 @@ export default function GalleryPage() {
     return () => {
       clearTimeout(triggerTimer);
     };
-  }, [currentIndex, activeTopicId, filteredSlides]);
+  }, [currentIndex, activeTopicId, filteredSlides, OVERLAY_TRIGGER_CHANCE]);
 
   useEffect(() => {
     if (overlayState === 'visible' && activeOverlayVideo && activeOverlayStyle === 'fullscreen') {

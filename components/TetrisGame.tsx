@@ -168,7 +168,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
   const [listeningAction, setListeningAction] = useState<string | null>(null);
   const listeningActionRef = useRef<string | null>(null);
   
-  const [tuning, setTuning] = useState({ das: 170, arr: 30, dcd: 0, sdf: 30 });
+  const [tuning, setTuning] = useState({ das: 170, arr: 30, dcd: 0, sdf: 40 });
   const tuningRef = useRef(tuning);
   
   const [controls, setControls] = useState({ 
@@ -510,7 +510,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     } else {
       lastMoveRef.current = 'move';
       if (isLockingRef.current) {
-        if (lockResetsRef.current < 15) {
+        if (lockResetsRef.current < 7) {
           lockTimerRef.current = 0;
           lockResetsRef.current++;
         }
@@ -540,7 +540,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
            player.current.rotState = nextState;
            lastMoveRef.current = 'rotate';
            if (isLockingRef.current) {
-             if (lockResetsRef.current < 15) {
+             if (lockResetsRef.current < 7) {
                lockTimerRef.current = 0;
                lockResetsRef.current++;
              }
@@ -571,7 +571,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
             player.current.rotState = nextState;
             lastMoveRef.current = 'rotate';
             if (isLockingRef.current) {
-              if (lockResetsRef.current < 15) {
+              if (lockResetsRef.current < 7) {
                 lockTimerRef.current = 0;
                 lockResetsRef.current++;
               }

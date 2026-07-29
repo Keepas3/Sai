@@ -10,7 +10,7 @@ import galleryTopic from './galleryTopic'
 import galleryItem from './galleryItem'
 import nowPlaying from './nowPlaying'
 import footerSettings from './footer'
-
+import fortuneSlip from './fortuneSlip'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
@@ -25,5 +25,6 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     galleryItem,
     nowPlaying,
     footerSettings,
+    fortuneSlip,
   ],
 }

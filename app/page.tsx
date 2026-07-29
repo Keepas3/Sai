@@ -1,5 +1,6 @@
 import Navbar from "@/components/Navbar";
 import SpotifyStatus from "@/components/SpotifyStatus"; 
+import FortuneSlip from "@/components/FortuneSlip";
 import { client } from '@/sanity/lib/client';
 import Link from 'next/link';
 
@@ -39,6 +40,9 @@ export default async function Home() {
       bio,
       "avatarUrl": avatar.asset->url,
       "bannerUrl": banner.asset->url
+    },
+    "fortuneSlip": *[_type == "fortuneSlip"][0]{
+      fortuneSlips
     },
     "projectsData": *[_type == "project" && defined(projectList)] | order(_updatedAt desc)[0] {
       projectList[] {
@@ -89,6 +93,7 @@ export default async function Home() {
   }`, {}, { cache: 'no-store' });
 
   const profile: ProfileData | null = data.profile;
+  const fortuneSlip = data.fortuneSlip;
   const projects: DashboardProject[] = data.projectsData?.projectList || [];
   
   const games: HomeMediaItem[] = data.gamesData?.gamesList || [];
@@ -123,7 +128,13 @@ export default async function Home() {
                 className="avatar-image" 
               /> 
             </div>
-            <h1 className="profile-name">{profile?.name || "Sai"}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="profile-name">{profile?.name || "Sai"}</h1>
+              <FortuneSlip
+                slips={fortuneSlip?.fortuneSlips || []}
+                inline
+              />
+            </div>
           </div>
           
           <div className="profile-bio-wrapper">

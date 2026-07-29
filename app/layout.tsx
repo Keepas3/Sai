@@ -29,6 +29,12 @@ const NOW_PLAYING_QUERY = `*[_type == "nowPlaying"][0]{
   loopEnd
 }`;
 
+const FORTUNE_SLIP_QUERY = `*[_type == "fortuneSlip"][0]{
+  title,
+  preview,
+  note
+}`;
+
 // 2. Make the layout async so we can fetch data securely on the server
 export default async function RootLayout({
   children,
@@ -38,6 +44,7 @@ export default async function RootLayout({
   
   // 3. Fetch the track data from Sanity
   const track: TrackData | null = await client.fetch(NOW_PLAYING_QUERY);
+  const fortuneSlip = await client.fetch(FORTUNE_SLIP_QUERY);
 
   return (
     <html lang="en" className={`scroll-smooth ${comfortaa.variable}`}>
