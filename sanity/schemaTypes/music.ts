@@ -2,6 +2,14 @@ export default {
   name: 'musicPage',
   type: 'document',
   title: 'Music Page Content',
+  preview: {
+    prepare() {
+      return {
+        title: 'Music Library', // This is the big formal title
+        subtitle: 'Manage your music collection', // Optional: adds a nice little description underneath
+      };
+    },
+  },
   fields: [
     {
       name: 'pageTitle',

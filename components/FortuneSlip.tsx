@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 
 interface FortuneSlip {
   title: string;
@@ -18,9 +18,61 @@ interface FortuneSlipProps {
 const MIN_SHAKES = 3;
 const MAX_SHAKES = 4;
 
-// Once a slip is drawn, the box disappears for this long before it resets.
-const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+// Once a slip is drawn, the box disappears until the next daily reset.
+const RESET_HOUR_EASTERN = 4; // 4:00 AM America/New_York
 const STORAGE_KEY = 'fortune-slip:next-available-at';
+
+// Returns the epoch ms timestamp of the next occurrence of RESET_HOUR_EASTERN
+// in America/New_York time, at or after `referenceDate`. Handles the
+// EST/EDT switch automatically since it reads the zone's actual offset
+// for the target day rather than assuming a fixed UTC offset.
+function getNextDailyResetUTC(referenceDate: Date): number {
+  const nyFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = nyFormatter.formatToParts(referenceDate).reduce<Record<string, string>>((acc, part) => {
+    if (part.type !== 'literal') acc[part.type] = part.value;
+    return acc;
+  }, {});
+
+  let year = Number(parts.year);
+  let month = Number(parts.month);
+  let day = Number(parts.day);
+  // Some engines render midnight as "24" with hour12: false.
+  const hour = Number(parts.hour) === 24 ? 0 : Number(parts.hour);
+  const minute = Number(parts.minute);
+  const second = Number(parts.second);
+
+  const isPastResetToday =
+    hour > RESET_HOUR_EASTERN || (hour === RESET_HOUR_EASTERN && (minute > 0 || second > 0));
+
+  if (isPastResetToday) {
+    const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+    year = nextDay.getUTCFullYear();
+    month = nextDay.getUTCMonth() + 1;
+    day = nextDay.getUTCDate();
+  }
+
+  // Figure out whether that target date falls in EST or EDT so we know
+  // exactly how many hours ahead of UTC "4 AM Eastern" actually is.
+  const offsetFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    timeZoneName: 'short',
+  });
+  const anchor = new Date(Date.UTC(year, month - 1, day, 12));
+  const offsetLabel = offsetFormatter.formatToParts(anchor).find((p) => p.type === 'timeZoneName')?.value;
+  const offsetHours = offsetLabel === 'EDT' ? -4 : -5;
+
+  return Date.UTC(year, month - 1, day, RESET_HOUR_EASTERN - offsetHours, 0, 0);
+}
 
 function randomShakesNeeded() {
   return MIN_SHAKES + Math.floor(Math.random() * (MAX_SHAKES - MIN_SHAKES + 1));
@@ -37,6 +89,8 @@ export default function FortuneSlip({
   const [selectedSlip, setSelectedSlip] = useState<FortuneSlip | null>(null);
   const [nextAvailableAt, setNextAvailableAt] = useState<number | null>(null);
   const [hasCheckedStorage, setHasCheckedStorage] = useState(false);
+  const [emergeOrigin, setEmergeOrigin] = useState<{ x: number; y: number } | null>(null);
+  const boxButtonRef = useRef<HTMLButtonElement | null>(null);
 
   // Pick a random slip when the component mounts or when slips change
   useEffect(() => {
@@ -51,7 +105,7 @@ export default function FortuneSlip({
   const content = selectedSlip?.note?.trim() || 'No fortune slips have been configured yet.';
   const imageSrc = '/box.png';
 
-  // On mount, check whether a slip was already drawn within the last 24 hours.
+  // On mount, check whether a slip has already been drawn since the last reset.
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -139,10 +193,20 @@ export default function FortuneSlip({
 
     setTimeout(() => {
       if (isFinalShake) {
+        const rect = boxButtonRef.current?.getBoundingClientRect();
+        if (rect) {
+          setEmergeOrigin({
+            x: rect.left + rect.width / 2 - window.innerWidth / 2,
+            y: rect.top + rect.height / 2 - window.innerHeight / 2,
+          });
+        } else {
+          setEmergeOrigin({ x: 0, y: 60 });
+        }
+
         setIsShaking(false);
         setIsOpen(true);
 
-        const nextTime = Date.now() + COOLDOWN_MS;
+        const nextTime = getNextDailyResetUTC(new Date());
         try {
           window.localStorage.setItem(STORAGE_KEY, String(nextTime));
         } catch {
@@ -200,6 +264,15 @@ export default function FortuneSlip({
           }
         }
 
+        @keyframes fortune-emerge {
+          0% {
+            transform: translate(var(--start-x), var(--start-y)) scale(var(--start-scale));
+          }
+          100% {
+            transform: translate(0, 0) scale(1);
+          }
+        }
+
         @keyframes fortune-unroll {
           0% {
             transform: scaleY(0.15) scaleX(0.9) translateY(-14px);
@@ -221,6 +294,7 @@ export default function FortuneSlip({
 
       {hasCheckedStorage && isAvailable && (
         <button
+          ref={boxButtonRef}
           type="button"
           onClick={handleOpen}
           className={`group overflow-visible rounded-[16px] border border-transparent bg-transparent p-0 text-left shadow-none transition-transform duration-200 hover:scale-[1.03] ${
@@ -276,8 +350,15 @@ export default function FortuneSlip({
           onClick={handleClose}
         >
           <div
-            className="relative w-full max-w-[280px] origin-top"
-            style={{ animation: 'fortune-unroll 650ms cubic-bezier(0.22,1,0.36,1) both' }}
+            className="relative w-full max-w-[280px]"
+            style={
+              {
+                animation: 'fortune-emerge 420ms cubic-bezier(0.16,1,0.3,1) both',
+                '--start-x': `${emergeOrigin?.x ?? 0}px`,
+                '--start-y': `${emergeOrigin?.y ?? 60}px`,
+                '--start-scale': 0.22,
+              } as CSSProperties
+            }
           >
             {/* cord + tag, as if this were pulled out on a string */}
             <div className="pointer-events-none absolute left-1/2 top-0 flex -translate-x-1/2 -translate-y-[90%] flex-col items-center">
@@ -290,8 +371,9 @@ export default function FortuneSlip({
             <div className="pointer-events-none absolute -inset-1 -z-10 -rotate-1 rounded-[14px] border border-[#8b5a3c]/15 bg-[#f2cf95]/60" />
 
             <div
-              className="relative overflow-hidden rounded-[12px] border border-[#8b5a3c]/30 text-[#3b2413] shadow-[0_25px_80px_rgba(0,0,0,0.55)]"
+              className="relative origin-top overflow-hidden rounded-[12px] border border-[#8b5a3c]/30 text-[#3b2413] shadow-[0_25px_80px_rgba(0,0,0,0.55)]"
               style={{
+                animation: 'fortune-unroll 520ms ease-out 260ms both',
                 background:
                   'radial-gradient(circle at 18% 22%, rgba(139,90,60,0.07), transparent 42%), radial-gradient(circle at 82% 78%, rgba(139,90,60,0.06), transparent 46%), linear-gradient(145deg,#fff9ea,#f2cf95)',
               }}

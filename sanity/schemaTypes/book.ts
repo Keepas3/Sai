@@ -4,6 +4,14 @@ export const bookType = defineType({
   name: 'book',
   title: 'Books Library',
   type: 'document',
+  preview: {
+    prepare() {
+      return {
+        title: 'Books Library', // This is the big formal title
+        subtitle: 'Manage your book collection', // Optional: adds a nice little description underneath
+      };
+    },
+  },
   fields: [
     defineField({
       name: 'pageTitle',

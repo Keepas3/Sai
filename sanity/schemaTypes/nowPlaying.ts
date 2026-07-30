@@ -4,6 +4,14 @@ export default defineType({
   name: 'nowPlaying',
   title: 'Now Playing Track',
   type: 'document',
+  preview: {
+    prepare() {
+      return {
+        title: 'Now Playing Track', // This is the big formal title
+        subtitle: 'Manage the currently playing track and loop settings', // Optional: adds a nice little description underneath
+      };
+    },
+  },
   fields: [
     defineField({
       name: 'title',

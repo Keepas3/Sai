@@ -58,7 +58,7 @@ export default function NowPlayingWidget() {
             Now Playing
           </span>
           <span style={{ 
-            fontSize: '11px', // ~5% smaller font
+            fontSize: '11px', 
             color: 'white', 
             fontWeight: 'bold', 
             whiteSpace: 'nowrap',

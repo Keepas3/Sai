@@ -22,19 +22,49 @@ export const formatTime = (ms: number) => {
 
 export default function TitleScreen({ onPlay }: TitleScreenProps) {
   const [leaderboard, setLeaderboard] = useState<ScoreEntry[]>([]);
+  const [allTimeBest, setAllTimeBest] = useState<ScoreEntry | null>(null);
   const [viewMode, setViewMode] = useState<'standard' | 'sprint' | 'blitz'>('standard');
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
+      const ascending = viewMode === 'sprint';
+
+      // The all-time best score for this mode — pinned at the top no
+      // matter what month it happened in.
+      const { data: bestData, error: bestError } = await supabase
+        .from('tetris_scores')
+        .select('name, score, level, mode')
+        .eq('mode', viewMode)
+        .order('score', { ascending })
+        .limit(1);
+
+      const best = !bestError && bestData && bestData.length > 0 ? bestData[0] : null;
+      setAllTimeBest(best);
+
+      // This month's top 10 — resets automatically as soon as the
+      // calendar rolls into a new month (anchored to UTC so the reset
+      // happens at the same instant for everyone, not each viewer's
+      // local midnight).
+      const now = new Date();
+      const startOfMonthUTC = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+      ).toISOString();
+
       const { data, error } = await supabase
         .from('tetris_scores')
         .select('name, score, level, mode')
         .eq('mode', viewMode)
-        .order('score', { ascending: viewMode === 'sprint' })
-        .limit(5);
+        .gte('created_at', startOfMonthUTC)
+        .order('score', { ascending })
+        .limit(10); // limit of scores shown
 
       if (!error && data) {
-        setLeaderboard(data);
+        // Avoid showing the pinned all-time best a second time if it
+        // also happened to be set this month.
+        const withoutDuplicate = best
+          ? data.filter((entry) => !(entry.name === best.name && entry.score === best.score))
+          : data;
+        setLeaderboard(withoutDuplicate);
       }
     };
     fetchLeaderboard();
@@ -75,12 +105,47 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
           </button>
         </div>
 
+        {/* All-time best, pinned above the monthly list */}
+        {allTimeBest && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+              fontSize: '0.875rem',
+              color: '#ffd76a',
+              paddingBottom: '0.5rem',
+              marginBottom: '0.75rem',
+              borderBottom: '1px solid rgba(255,215,106,0.25)',
+            }}
+          >
+            <span style={{ fontWeight: 'bold', letterSpacing: '0.08em' }}>
+              ★ All-Time · {allTimeBest.name}
+            </span>
+            <span style={{ textShadow: '0 0 8px rgba(255,215,106,0.6)', fontWeight: 'bold' }}>
+              {viewMode === 'sprint' ? formatTime(allTimeBest.score) : allTimeBest.score}
+            </span>
+          </div>
+        )}
+
+        <p
+          style={{
+            fontSize: '0.65rem',
+            color: 'rgba(255,255,255,0.3)',
+            letterSpacing: '0.15em',
+            textTransform: 'uppercase',
+            margin: '0 0 0.5rem 0',
+          }}
+        >
+          This Month
+        </p>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minHeight: '120px' }}>
           {leaderboard.length === 0 ? (
             <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '10px', textAlign: 'center', marginTop: '1.5rem' }}>NO SCORES YET</p>
           ) : (
             leaderboard.map((entry, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: i === 0 ? 'white' : 'rgba(255,255,255,0.5)', borderBottom: i !== 4 ? '1px solid rgba(255,255,255,0.05)' : 'none', paddingBottom: i !== 4 ? '0.25rem' : '0' }}>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: i === 0 ? 'white' : 'rgba(255,255,255,0.5)', borderBottom: i !== leaderboard.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none', paddingBottom: i !== leaderboard.length - 1 ? '0.25rem' : '0' }}>
                 <span style={{ fontWeight: i === 0 ? 'bold' : 'normal', letterSpacing: '0.1em' }}>
                   {i + 1}. {entry.name}
                 </span>

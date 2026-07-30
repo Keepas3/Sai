@@ -2,6 +2,14 @@ export default {
   name: 'project',
   type: 'document',
   title: 'Projects Page Settings',
+  preview: {
+    prepare() {
+      return {
+        title: 'Projects Library', // This is the big formal title
+        subtitle: 'Manage your project collection', // Optional: adds a nice little description underneath
+      };
+    },
+  },
   fields: [
     {
       name: 'pageTitle',

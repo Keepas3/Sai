@@ -4,6 +4,7 @@ export default defineType({
   name: 'galleryItem',
   title: 'Gallery Image',
   type: 'object',
+  
   fields: [
     defineField({
       name: 'title',

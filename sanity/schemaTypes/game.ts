@@ -2,6 +2,14 @@ export default {
   name: 'game',
   type: 'document',
   title: 'Games Page Settings',
+  preview: {
+    prepare() {
+      return {
+        title: 'Game Library', // This is the big formal title
+        subtitle: 'Manage your game collection', // Optional: adds a nice little description underneath
+      };
+    },
+  },
   fields: [
     {
       name: 'pageTitle',
