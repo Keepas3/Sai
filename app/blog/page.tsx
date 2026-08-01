@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import Navbar from "@/components/Navbar";
 import { client } from '@/sanity/lib/client';
 
@@ -17,7 +18,10 @@ interface BlogPost {
 }
 
 export default function BlogPage() {
-  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const searchParams = useSearchParams();
+  const categoryParam = searchParams.get('category');
+  
+  const [activeCategory, setActiveCategory] = useState<string>(categoryParam || 'all');
   const [expandedMonths, setExpandedMonths] = useState<{ [key: string]: boolean }>({});
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isFeaturedOpen, setIsFeaturedOpen] = useState(true);
@@ -26,6 +30,13 @@ export default function BlogPage() {
   const [categories, setCategories] = useState<{title: string, slug: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Update active category if URL param changes
+    if (categoryParam) {
+      setActiveCategory(categoryParam);
+    }
+  }, [categoryParam]);
 
   useEffect(() => {
     async function fetchBlogData() {

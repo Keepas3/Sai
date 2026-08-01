@@ -15,12 +15,58 @@ interface FortuneSlipProps {
 
 // The box needs this many taps before it "releases" a slip — mimics
 // actually rattling an omikuji box a few times before a stick falls out.
-const MIN_SHAKES = 3;
-const MAX_SHAKES = 4;
+// ---------------------------------------------------------------------------
+// TEMPORARY — FOR LOCAL TESTING ONLY.
+// Flip this to `true` to skip waiting for real daily resets: the box will
+// only need 1 shake to open, and it'll reappear (and advance the streak)
+// after DEV_RESET_INTERVAL_MS instead of the actual next 4 AM Eastern —
+// so you can click through several "days" in under a minute and watch the
+// streak history / 7-day omamori reward trigger. Set back to `false`
+// (or just delete this block) before shipping.
+const DEV_FAST_FORWARD = false;
+const DEV_RESET_INTERVAL_MS = 15_000; // 15 seconds per "day" while testing
+// ---------------------------------------------------------------------------
+
+const MIN_SHAKES = DEV_FAST_FORWARD ? 1 : 3;
+const MAX_SHAKES = DEV_FAST_FORWARD ? 1 : 4;
 
 // Once a slip is drawn, the box disappears until the next daily reset.
 const RESET_HOUR_EASTERN = 4; // 4:00 AM America/New_York
 const STORAGE_KEY = 'fortune-slip:next-available-at';
+const STREAK_COUNT_KEY = 'fortune-slip:streak-count';
+// The reset boundary (epoch ms) that followed the most recent open — used to
+// tell whether the next open happens during the very next available window
+// (streak continues) or later (one or more days were missed, streak resets).
+const STREAK_PERIOD_KEY = 'fortune-slip:streak-period-end';
+// The titles collected so far in the current streak cycle, so they can be
+// shown back once the player has enough of a streak going.
+const STREAK_HISTORY_KEY = 'fortune-slip:streak-history';
+// Persists the chosen reward message so it survives a page reload while the
+// player is still within the reward day (before the next reset clears it).
+const STREAK_OMAMORI_MESSAGE_KEY = 'fortune-slip:streak-omamori-message';
+
+// From day 3 onward, show the fortunes collected so far this cycle.
+const HISTORY_VISIBLE_FROM_STREAK = 2;
+// Reaching this many days in a row triggers the omamori reward, then the
+// next open starts a brand new cycle back at day 1.
+const STREAK_CYCLE_LENGTH = 7;
+
+// Shown once, chosen at random, the moment the 7-day omamori is earned.
+// Unlike the regular fortune notes (which come from Sanity and can be about
+// anything), these are written specifically about the achievement itself —
+// so the reward reads as its own distinct thing, not just another fortune.
+const OMAMORI_MESSAGES = [
+  'Seven days, unbroken. This charm is yours to keep.',
+  "Not everyone comes back seven days running. You did.",
+  "This omamori carries the weight of a full week's devotion.",
+  'Few make it this far. Wear this luck well.',
+  'A charm earned counts for more than a charm given.',
+  'Seven visits, one charm. May it watch over what comes next.',
+  "You showed up seven times when you didn't have to. That's commitment.",
+  "This one isn't left to chance — you built it, day by day.",
+  "Hold onto this. It remembers the week you didn't quit.",
+  'Fortune finds the lucky. This charm finds the persistent.',
+];
 
 // Returns the epoch ms timestamp of the next occurrence of RESET_HOUR_EASTERN
 // in America/New_York time, at or after `referenceDate`. Handles the
@@ -74,6 +120,54 @@ function getNextDailyResetUTC(referenceDate: Date): number {
   return Date.UTC(year, month - 1, day, RESET_HOUR_EASTERN - offsetHours, 0, 0);
 }
 
+// Wraps getNextDailyResetUTC so both call sites below automatically respect
+// DEV_FAST_FORWARD without duplicating the branch in each place.
+function getNextPeriodBoundary(referenceDate: Date): number {
+  if (DEV_FAST_FORWARD) {
+    return referenceDate.getTime() + DEV_RESET_INTERVAL_MS;
+  }
+  return getNextDailyResetUTC(referenceDate);
+}
+
+interface StreakEntry {
+  weekday: string; // 'Sun' | 'Mon' | ... — see WEEKDAY_ORDER
+  title: string;
+}
+
+const WEEKDAY_ORDER = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Which weekday a draw falls on, read in the same America/New_York calendar
+// day the reset logic already uses — so a draw at 11pm Pacific (which is
+// past midnight Eastern) lands on the day ET considers "today," matching
+// which reset window it actually counted toward.
+function getWeekdayLabel(date: Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+  }).format(date);
+}
+
+// `previousPeriodEnd` is the reset boundary that followed the last open
+// (i.e. what was stored as `nextAvailableAt` at the time). The streak
+// continues only if `now` falls within the single window immediately after
+// that boundary — meaning the player opened it the very next time it was
+// available. If they skipped one or more resets, it's a fresh streak of 1.
+function computeUpdatedStreak(now: number, previousPeriodEnd: number | null, previousStreak: number): number {
+  if (previousPeriodEnd === null || !Number.isFinite(previousPeriodEnd)) {
+    return 1;
+  }
+  if (previousStreak >= STREAK_CYCLE_LENGTH) {
+    // Already completed a full cycle last time — start a fresh one.
+    return 1;
+  }
+  // Nudge a second past the boundary so re-running the reset calculation
+  // from that exact instant correctly advances to the *following* reset
+  // instead of returning the same one (since it lands exactly on 4:00:00).
+  const nextBoundary = getNextPeriodBoundary(new Date(previousPeriodEnd + 1000));
+  const isConsecutive = now < nextBoundary;
+  return isConsecutive ? previousStreak + 1 : 1;
+}
+
 function randomShakesNeeded() {
   return MIN_SHAKES + Math.floor(Math.random() * (MAX_SHAKES - MIN_SHAKES + 1));
 }
@@ -90,6 +184,13 @@ export default function FortuneSlip({
   const [nextAvailableAt, setNextAvailableAt] = useState<number | null>(null);
   const [hasCheckedStorage, setHasCheckedStorage] = useState(false);
   const [emergeOrigin, setEmergeOrigin] = useState<{ x: number; y: number } | null>(null);
+  const [streak, setStreak] = useState(0);
+  const [streakHistory, setStreakHistory] = useState<StreakEntry[]>([]);
+  const [omamoriMessage, setOmamoriMessage] = useState<string | null>(null);
+  // True only when the popup was opened by tapping the *persisted* omamori
+  // button (a later visit). The very first reveal right after drawing on
+  // day 7 still shows the normal fortune content, same as any other day.
+  const [isViewingRewardMessage, setIsViewingRewardMessage] = useState(false);
   const boxButtonRef = useRef<HTMLButtonElement | null>(null);
 
   // Pick a random slip when the component mounts or when slips change
@@ -111,6 +212,18 @@ export default function FortuneSlip({
       const stored = window.localStorage.getItem(STORAGE_KEY);
       const parsed = stored ? Number(stored) : null;
       setNextAvailableAt(parsed && !Number.isNaN(parsed) ? parsed : null);
+
+      // Also restore the streak count and (if it was a 7-day reward) the
+      // message that goes with it, so reloading mid-reward-day still shows
+      // the same omamori instead of losing it.
+      const storedStreak = Number(window.localStorage.getItem(STREAK_COUNT_KEY));
+      if (Number.isFinite(storedStreak) && storedStreak > 0) {
+        setStreak(storedStreak);
+      }
+      const storedMessage = window.localStorage.getItem(STREAK_OMAMORI_MESSAGE_KEY);
+      if (storedMessage) {
+        setOmamoriMessage(storedMessage);
+      }
     } catch {
       // localStorage may be unavailable (private browsing, etc.) — fail open.
       setNextAvailableAt(null);
@@ -147,6 +260,10 @@ export default function FortuneSlip({
   }, [nextAvailableAt]);
 
   const isAvailable = !nextAvailableAt || Date.now() >= nextAvailableAt;
+  // True for the whole cooldown window following a 7th-day draw — the
+  // omamori takes the box's place and stays visible for the rest of that
+  // day, instead of the box just disappearing like on a normal day.
+  const isRewardCooldown = hasCheckedStorage && !isAvailable && streak === STREAK_CYCLE_LENGTH;
 
   useEffect(() => {
     if (!isOpen) {
@@ -172,6 +289,7 @@ export default function FortuneSlip({
     setIsShaking(false);
     setShakeCount(0);
     setShakesNeeded(randomShakesNeeded());
+    setIsViewingRewardMessage(false);
   };
 
   const handleOpen = (event?: MouseEvent<HTMLButtonElement>) => {
@@ -205,18 +323,89 @@ export default function FortuneSlip({
 
         setIsShaking(false);
         setIsOpen(true);
+        setIsViewingRewardMessage(false);
 
-        const nextTime = getNextDailyResetUTC(new Date());
+        const now = Date.now();
+        const nextTime = getNextPeriodBoundary(new Date(now));
+
+        // Read what was stored from the *previous* open before overwriting it.
+        let previousPeriodEnd: number | null = null;
+        let previousStreak = 0;
+        try {
+          const storedPeriodEnd = Number(window.localStorage.getItem(STREAK_PERIOD_KEY));
+          previousPeriodEnd = Number.isFinite(storedPeriodEnd) && storedPeriodEnd > 0 ? storedPeriodEnd : null;
+          previousStreak = Number(window.localStorage.getItem(STREAK_COUNT_KEY)) || 0;
+        } catch {
+          // ignore — treated as a fresh streak below
+        }
+
+        const updatedStreak = computeUpdatedStreak(now, previousPeriodEnd, previousStreak);
+        setStreak(updatedStreak);
+
+        // Roll the history forward: a fresh cycle (updatedStreak === 1)
+        // starts over with just today's fortune; otherwise today's entry
+        // gets added to whatever was collected so far this cycle.
+        let previousHistory: StreakEntry[] = [];
+        try {
+          const storedHistoryRaw = window.localStorage.getItem(STREAK_HISTORY_KEY);
+          const parsedHistory = storedHistoryRaw ? JSON.parse(storedHistoryRaw) : [];
+          previousHistory = Array.isArray(parsedHistory)
+            ? parsedHistory.filter(
+                (entry): entry is StreakEntry =>
+                  typeof entry?.weekday === 'string' && typeof entry?.title === 'string'
+              )
+            : [];
+        } catch {
+          previousHistory = [];
+        }
+
+        const todayEntry: StreakEntry = { weekday: getWeekdayLabel(new Date(now)), title };
+        const updatedHistory = updatedStreak === 1 ? [todayEntry] : [...previousHistory, todayEntry];
+        setStreakHistory(updatedHistory);
+
+        const rewardMessage =
+          updatedStreak === STREAK_CYCLE_LENGTH
+            ? OMAMORI_MESSAGES[Math.floor(Math.random() * OMAMORI_MESSAGES.length)]
+            : null;
+        setOmamoriMessage(rewardMessage);
+
         try {
           window.localStorage.setItem(STORAGE_KEY, String(nextTime));
+          window.localStorage.setItem(STREAK_COUNT_KEY, String(updatedStreak));
+          window.localStorage.setItem(STREAK_PERIOD_KEY, String(nextTime));
+          window.localStorage.setItem(STREAK_HISTORY_KEY, JSON.stringify(updatedHistory));
+          if (rewardMessage) {
+            window.localStorage.setItem(STREAK_OMAMORI_MESSAGE_KEY, rewardMessage);
+          }
         } catch {
-          // ignore — cooldown just won't persist across reloads
+          // ignore — cooldown/streak just won't persist across reloads
         }
         setNextAvailableAt(nextTime);
       } else {
         setIsShaking(false);
       }
     }, duration);
+  };
+
+  // Opens (or closes, if already open) the persisted 7-day reward view.
+  // No shaking needed here — the omamori is just sitting there waiting.
+  const handleOpenReward = () => {
+    if (isOpen) {
+      handleClose();
+      return;
+    }
+
+    const rect = boxButtonRef.current?.getBoundingClientRect();
+    if (rect) {
+      setEmergeOrigin({
+        x: rect.left + rect.width / 2 - window.innerWidth / 2,
+        y: rect.top + rect.height / 2 - window.innerHeight / 2,
+      });
+    } else {
+      setEmergeOrigin({ x: 0, y: 60 });
+    }
+    setIsOpen(true);
+    setIsViewingRewardMessage(true);
   };
 
   const shakesRemaining = Math.max(shakesNeeded - shakeCount, 0);
@@ -343,6 +532,21 @@ export default function FortuneSlip({
         </button>
       )}
 
+      {isRewardCooldown && (
+        <button
+          ref={boxButtonRef}
+          type="button"
+          onClick={handleOpenReward}
+          className={`group overflow-visible rounded-[16px] border border-transparent bg-transparent p-0 text-left shadow-none transition-transform duration-200 hover:scale-[1.03] ${
+            inline ? 'relative z-[1200] inline-flex shrink-0 items-center justify-center' : 'hidden'
+          }`}
+          style={{ width: '64px', height: '152px' }}
+          aria-label="View your 7-day omamori reward"
+        >
+          <img src="/omamori.png" alt="Omamori charm" className="h-full w-full object-contain object-left" />
+        </button>
+      )}
+
       {isOpen && (
         <div
           className="fixed inset-0 z-[1300] flex items-center justify-center bg-[rgba(5,3,2,0.72)] px-4 py-6 backdrop-blur-sm"
@@ -403,33 +607,95 @@ export default function FortuneSlip({
               <div className="pointer-events-none absolute bottom-6 left-4 top-6 w-[3px] rounded-full bg-[#b82d1d]/50" />
 
               <div className="relative px-7 pb-6 pt-8">
-                <p className="text-center text-[10px] font-mono uppercase tracking-[0.4em] text-[#8b5a3c]">
-                  おみくじ
-                </p>
-                <div className="mx-auto mt-2 h-px w-10 bg-[#8b5a3c]/40" />
-                <h3 className="mt-3 text-center text-xl font-semibold tracking-wide text-[#4a2b16]">
-                  {title}
-                </h3>
+                {isViewingRewardMessage ? (
+                  <div className="flex flex-col items-center py-4">
+                    <p className="text-center text-[10px] font-mono uppercase tracking-[0.5em] text-[#b82d1d]">
+                      ✦ Omamori ✦
+                    </p>
+                    <p className="mt-5 text-center text-[16px] font-semibold not-italic leading-8 text-[#7a1f12]">
+                      {omamoriMessage}
+                    </p>
 
-                <div className="mt-5 rounded-[12px] border border-[#8b5a3c]/20 bg-[#fffdf8]/85 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  <p className="whitespace-pre-line text-center text-[15px] leading-8 text-[#3f2815]">
-                    {content}
-                  </p>
-                </div>
+                    <div className="mt-6 flex items-center justify-center gap-2 text-[#b82d1d]/40">
+                      <span className="h-px w-6 bg-[#b82d1d]/30" />
+                      <span className="text-[11px]">福</span>
+                      <span className="h-px w-6 bg-[#b82d1d]/30" />
+                    </div>
 
-                <p className="mt-3 whitespace-pre-line text-center text-[13px] italic leading-6 text-[#8b5a3c]/80">
-                  {teaser}
-                </p>
+                    <p className="mt-3 text-center text-[10px] font-mono uppercase tracking-[0.3em] text-[#8b5a3c]/70">
+                      Tap anywhere to close
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-center text-[10px] font-mono uppercase tracking-[0.4em] text-[#8b5a3c]">
+                      おみくじ
+                    </p>
+                    <div className="mx-auto mt-2 h-px w-10 bg-[#8b5a3c]/40" />
+                    <h3 className="mt-3 text-center text-xl font-semibold tracking-wide text-[#4a2b16]">
+                      {title}
+                    </h3>
 
-                <div className="mt-5 flex items-center justify-center gap-2 text-[#8b5a3c]/50">
-                  <span className="h-px w-6 bg-[#8b5a3c]/30" />
-                  <span className="text-[11px]">✳</span>
-                  <span className="h-px w-6 bg-[#8b5a3c]/30" />
-                </div>
+                    {streak > 0 && (
+                      <div className="mx-auto mt-2 flex w-fit items-center gap-1.5 rounded-full border border-[#b82d1d]/30 bg-[#b82d1d]/10 px-3 py-1 text-[11px] font-semibold tracking-wide text-[#b82d1d]">
+                        <span>🔥</span>
+                        <span>
+                          {streak}-Day Streak
+                        </span>
+                      </div>
+                    )}
 
-                <p className="mt-3 text-center text-[10px] font-mono uppercase tracking-[0.3em] text-[#8b5a3c]/70">
-                  Tap anywhere to close
-                </p>
+                    <div className="mt-5 rounded-[12px] border border-[#8b5a3c]/20 bg-[#fffdf8]/85 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                      <p className="whitespace-pre-line text-center text-[15px] leading-8 text-[#3f2815]">
+                        {content}
+                      </p>
+                    </div>
+
+                    <p className="mt-3 whitespace-pre-line text-center text-[13px] italic leading-6 text-[#8b5a3c]/80">
+                      {teaser}
+                    </p>
+
+                    {streak >= HISTORY_VISIBLE_FROM_STREAK && streakHistory.length > 0 && (
+                      <div className="mt-4 rounded-[10px] border border-[#8b5a3c]/20 bg-[#fffdf8]/70 p-3">
+                        <p className="text-center text-[10px] font-mono uppercase tracking-[0.3em] text-[#8b5a3c]">
+                          This Week's Fortunes
+                        </p>
+                        <div className="mt-2 grid grid-cols-7 gap-1">
+                          {WEEKDAY_ORDER.map((day) => {
+                            const entry = streakHistory.find((item) => item.weekday === day);
+                            return (
+                              <div key={day} className="flex flex-col items-center gap-1">
+                                <span className="text-[8px] font-mono uppercase tracking-wide text-[#8b5a3c]/70">
+                                  {day}
+                                </span>
+                                <div
+                                  title={entry?.title}
+                                  className={`flex h-14 w-full items-center justify-center rounded-md border px-1 text-center text-[8.5px] leading-snug ${
+                                    entry
+                                      ? 'border-[#8b5a3c]/30 bg-[#f2cf95]/50 text-[#4a2b16]'
+                                      : 'border-dashed border-[#8b5a3c]/15 bg-transparent text-[#8b5a3c]/30'
+                                  }`}
+                                >
+                                  <span className="line-clamp-2 break-words">{entry ? entry.title : '—'}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-5 flex items-center justify-center gap-2 text-[#8b5a3c]/50">
+                      <span className="h-px w-6 bg-[#8b5a3c]/30" />
+                      <span className="text-[11px]">✳</span>
+                      <span className="h-px w-6 bg-[#8b5a3c]/30" />
+                    </div>
+
+                    <p className="mt-3 text-center text-[10px] font-mono uppercase tracking-[0.3em] text-[#8b5a3c]/70">
+                      Tap anywhere to close
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>

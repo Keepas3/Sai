@@ -330,7 +330,7 @@ export default async function Home() {
                   categories.map((category) => (
                     <Link 
                       key={category.slug} 
-                      href="/blog"  
+                      href={`/blog?category=${category.slug}`}
                       className="category-card-item"
                     >
                       <h4>{category.title} <span className="arrow-transition">→</span></h4>
