@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import TetrisApp from './TetrisApp'; // <-- Updated Import
+import { useBackgroundTheme } from './UseBackgroundTheme'; // Adjust path if needed
 
 interface TetrisModalProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface TetrisModalProps {
 
 export default function TetrisModal({ isOpen, onClose }: TetrisModalProps) {
   const [mounted, setMounted] = useState(false);
+  const { theme: backgroundTheme } = useBackgroundTheme();
 
   useEffect(() => {
     setMounted(true);
@@ -32,6 +34,11 @@ export default function TetrisModal({ isOpen, onClose }: TetrisModalProps) {
   }, [onClose]);
 
   if (!mounted) return null;
+
+  // "Classic" keeps the modal's original hand-tuned gradient; every other
+  // theme applies the same background used on the title screen so both
+  // stay in sync when changed from the settings panel.
+  const isClassicTheme = backgroundTheme.id === 'default';
 
   return createPortal(
     <AnimatePresence>
@@ -59,7 +66,7 @@ export default function TetrisModal({ isOpen, onClose }: TetrisModalProps) {
             style={{
               position: 'relative', width: '100%', maxWidth: '850px', backgroundColor: '#0a0708',
               border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '16px',
-              boxShadow: '0 0 50px rgba(229, 114, 159, 0.15)', overflow: 'hidden',
+              overflow: 'hidden',
               display: 'flex', flexDirection: 'column'
             }}
           >
@@ -85,9 +92,15 @@ export default function TetrisModal({ isOpen, onClose }: TetrisModalProps) {
             </div>
 
             <div style={{
+              position: 'relative',
               flex: 1, padding: '2rem 1.5rem', display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', minHeight: '650px',
-              background: 'linear-gradient(to bottom, #121214, #0a0708)'
+              backgroundImage: isClassicTheme ? 'linear-gradient(to bottom, #121214, #0a0708)' : backgroundTheme.backgroundImage,
+              backgroundColor: isClassicTheme ? undefined : backgroundTheme.backgroundColor,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              transition: 'background-image 0.4s ease, background-color 0.4s ease',
             }}>
               
               {/* WE RENDER THE MANAGER APP INSTEAD OF JUST THE GAME DIRECTLY */}

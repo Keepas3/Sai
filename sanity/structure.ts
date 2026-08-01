@@ -14,6 +14,23 @@ export const structure: StructureResolver = (S) =>
             .schemaType('profile')
             .documentId('profile') // Keeps it as a single static page editor instead of a messy list!
         ),
+
+        S.listItem()
+        .title('Gambling Fortune Slip')
+        .schemaType('fortuneSlip')
+        .child(
+          S.documentTypeList('fortuneSlip')
+            .title('Fortune Slip')
+        ),
+
+        S.listItem()
+        .title('Now Playing Track')
+        .schemaType('nowPlaying')
+        .child(
+          S.documentTypeList('nowPlaying')
+            .title('Now Playing Track')
+        ),
+
       S.listItem()
         .title('Blog Posts')
         .schemaType('post')
@@ -31,8 +48,6 @@ export const structure: StructureResolver = (S) =>
           .initialValueTemplates([S.initialValueTemplateItem('category')])
       ),
 
-
-      // 2. Music / Songs
       S.listItem()
         .title('Songs')
         .schemaType('musicPage')
@@ -63,6 +78,14 @@ export const structure: StructureResolver = (S) =>
                 ),
             ])
         ),
+      S.listItem()
+        .title('Background Themes')
+        .schemaType('backgroundTheme')
+        .child(
+          S.documentTypeList('backgroundTheme')
+            .title('Background Themes')
+        ),
+        
       // 4. Active Projects
       S.listItem()
         .title('Projects')
@@ -77,22 +100,7 @@ export const structure: StructureResolver = (S) =>
           S.documentTypeList('galleryTopic')
             .title('Albums & Archives')
         ),
-
-        S.listItem()
-        .title('Now Playing Track')
-        .schemaType('nowPlaying')
-        .child(
-          S.documentTypeList('nowPlaying')
-            .title('Now Playing Track')
-        ),
-
-        S.listItem()
-        .title('Gambling Fortune Slip')
-        .schemaType('fortuneSlip')
-        .child(
-          S.documentTypeList('fortuneSlip')
-            .title('Fortune Slip')
-        ),
+      
         // 6. Footer Settings
         S.listItem()
         .title('Footer Settings')

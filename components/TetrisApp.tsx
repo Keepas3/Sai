@@ -18,7 +18,7 @@ export default function TetrisApp() {
   };
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       {view === 'TITLE' && <TitleScreen onPlay={handlePlay} />}
       
       {/* We pass the gameMode down, and give it a way to return to the menu! */}

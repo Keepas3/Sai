@@ -868,7 +868,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
                   isPausedRef.current = willShow; 
                   setIsPaused(willShow); 
                 }} 
-                style={{ padding: '8px', backgroundColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                style={{ padding: '8px', backgroundColor: 'rgba(50,15,28,0.65)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}
               >
                 {showControls ? 'Resume' : 'Settings'}
               </button>
@@ -876,7 +876,9 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
           )}
         </div>
 
-        <button onClick={onMenu} style={{ padding: '8px', backgroundColor: 'rgba(229,114,159,0.1)', color: '#e5729f', border: '1px solid rgba(229,114,159,0.3)', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        <button onClick={onMenu} style={{ padding: '8px', backgroundColor: 'rgba(50,15,28,0.65)', 
+          color: '#e5729f', border: '1px solid rgba(229,114,159,0.3)', borderRadius: '4px', 
+          cursor: 'pointer', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           Quit
         </button>
       </div>
@@ -964,7 +966,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
         {showControls && (gameState === 'PLAYING' || gameState === 'COUNTDOWN') && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20, padding: '2rem 1.5rem', overflowY: 'auto' }}>
             
-            <h3 style={{ color: 'white', letterSpacing: '0.2em', marginBottom: '1.2rem', marginTop: 0, fontSize: '1.1rem' }}>SETTINGS</h3>
+            <h3 style={{ color: 'white', backgroundColor: 'rgba(50,15,28,0.65)', border: '1px solid #e5729f', letterSpacing: '0.2em', marginBottom: '1.2rem', marginTop: 0, fontSize: '1.1rem' }}>Settings</h3>
             
             <p style={{ color: '#e5729f', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 0.75rem 0', alignSelf: 'flex-start' }}>Keybinds</p>
             <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '1.5rem' }}>
