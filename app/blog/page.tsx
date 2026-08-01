@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import Navbar from "@/components/Navbar";
@@ -17,7 +17,7 @@ interface BlogPost {
   isPinned?: boolean; // NEW: Added isPinned to the interface
 }
 
-export default function BlogPage() {
+function BlogPageContent() {
   const searchParams = useSearchParams();
   const categoryParam = searchParams.get('category');
   
@@ -277,5 +277,31 @@ export default function BlogPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+// The actual page export. useSearchParams() (used inside BlogPageContent)
+// requires a Suspense boundary so this route can still be prerendered —
+// without it, the build fails trying to statically export this page since
+// the category comes from the URL at request/hydration time, not build time.
+export default function BlogPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="content-wrapper">
+          <Navbar />
+          <main className="page-container">
+            <h1 className="page-title">Blog Posts</h1>
+            <div className="status-box">
+              <p className="status-text italic text-white/30 text-center py-12">
+                Querying database records...
+              </p>
+            </div>
+          </main>
+        </div>
+      }
+    >
+      <BlogPageContent />
+    </Suspense>
   );
 }
