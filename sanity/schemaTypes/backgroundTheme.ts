@@ -34,7 +34,7 @@ export default defineType({
       title: 'Swatch Color',
       type: 'string',
       description:
-        'Shown as the little dot next to this theme in the picker.',
+        'Pick whatever option is closest to the main color of the image. Will be a small dot indicator.',
       options: {
         list: SWATCH_COLOR_OPTIONS,
         layout: 'radio',

@@ -23,7 +23,7 @@ interface FortuneSlipProps {
 // so you can click through several "days" in under a minute and watch the
 // streak history / 7-day omamori reward trigger. Set back to `false`
 // (or just delete this block) before shipping.
-const DEV_FAST_FORWARD = false;
+const DEV_FAST_FORWARD = true;
 const DEV_RESET_INTERVAL_MS = 15_000; // 15 seconds per "day" while testing
 // ---------------------------------------------------------------------------
 
@@ -47,8 +47,11 @@ const STREAK_OMAMORI_MESSAGE_KEY = 'fortune-slip:streak-omamori-message';
 
 // From day 3 onward, show the fortunes collected so far this cycle.
 const HISTORY_VISIBLE_FROM_STREAK = 2;
-// Reaching this many days in a row triggers the omamori reward, then the
-// next open starts a brand new cycle back at day 1.
+// The overall day-streak counts up indefinitely and never resets just for
+// reaching this — only missing a day resets it. What this controls is the
+// *cycle*: every time the streak hits a multiple of this many days, the
+// omamori reward triggers and the weekly history starts over, while the
+// streak count itself keeps climbing (8, 9, 10, ...).
 const STREAK_CYCLE_LENGTH = 7;
 
 // Shown once, chosen at random, the moment the 7-day omamori is earned.
@@ -152,12 +155,10 @@ function getWeekdayLabel(date: Date): string {
 // continues only if `now` falls within the single window immediately after
 // that boundary — meaning the player opened it the very next time it was
 // available. If they skipped one or more resets, it's a fresh streak of 1.
+// Reaching a 7-day cycle boundary does NOT reset this — only a missed day
+// does. See `getCycleDay` for the part that repeats every 7 days.
 function computeUpdatedStreak(now: number, previousPeriodEnd: number | null, previousStreak: number): number {
   if (previousPeriodEnd === null || !Number.isFinite(previousPeriodEnd)) {
-    return 1;
-  }
-  if (previousStreak >= STREAK_CYCLE_LENGTH) {
-    // Already completed a full cycle last time — start a fresh one.
     return 1;
   }
   // Nudge a second past the boundary so re-running the reset calculation
@@ -166,6 +167,14 @@ function computeUpdatedStreak(now: number, previousPeriodEnd: number | null, pre
   const nextBoundary = getNextPeriodBoundary(new Date(previousPeriodEnd + 1000));
   const isConsecutive = now < nextBoundary;
   return isConsecutive ? previousStreak + 1 : 1;
+}
+
+// Maps the uncapped day-streak onto its position within the current 7-day
+// cycle (1-7, repeating). Day 7 of a cycle is the omamori/reward day and the
+// weekly history table; day 1 of the next cycle is where both reset.
+function getCycleDay(streakValue: number): number {
+  if (streakValue <= 0) return 0;
+  return ((streakValue - 1) % STREAK_CYCLE_LENGTH) + 1;
 }
 
 function randomShakesNeeded() {
@@ -260,10 +269,10 @@ export default function FortuneSlip({
   }, [nextAvailableAt]);
 
   const isAvailable = !nextAvailableAt || Date.now() >= nextAvailableAt;
-  // True for the whole cooldown window following a 7th-day draw — the
-  // omamori takes the box's place and stays visible for the rest of that
-  // day, instead of the box just disappearing like on a normal day.
-  const isRewardCooldown = hasCheckedStorage && !isAvailable && streak === STREAK_CYCLE_LENGTH;
+  // True for the whole cooldown window following a cycle-day-7 draw (day 7,
+  // 14, 21, ...) — the omamori takes the box's place and stays visible for
+  // the rest of that day, instead of the box just disappearing like normal.
+  const isRewardCooldown = hasCheckedStorage && !isAvailable && getCycleDay(streak) === STREAK_CYCLE_LENGTH;
 
   useEffect(() => {
     if (!isOpen) {
@@ -341,8 +350,10 @@ export default function FortuneSlip({
 
         const updatedStreak = computeUpdatedStreak(now, previousPeriodEnd, previousStreak);
         setStreak(updatedStreak);
+        const updatedCycleDay = getCycleDay(updatedStreak);
 
-        // Roll the history forward: a fresh cycle (updatedStreak === 1)
+        // Roll the history forward: a fresh cycle (cycle day 1 — either the
+        // streak broke, or the previous cycle just completed on day 7)
         // starts over with just today's fortune; otherwise today's entry
         // gets added to whatever was collected so far this cycle.
         let previousHistory: StreakEntry[] = [];
@@ -360,11 +371,11 @@ export default function FortuneSlip({
         }
 
         const todayEntry: StreakEntry = { weekday: getWeekdayLabel(new Date(now)), title };
-        const updatedHistory = updatedStreak === 1 ? [todayEntry] : [...previousHistory, todayEntry];
+        const updatedHistory = updatedCycleDay === 1 ? [todayEntry] : [...previousHistory, todayEntry];
         setStreakHistory(updatedHistory);
 
         const rewardMessage =
-          updatedStreak === STREAK_CYCLE_LENGTH
+          updatedCycleDay === STREAK_CYCLE_LENGTH
             ? OMAMORI_MESSAGES[Math.floor(Math.random() * OMAMORI_MESSAGES.length)]
             : null;
         setOmamoriMessage(rewardMessage);
@@ -655,7 +666,7 @@ export default function FortuneSlip({
                       {teaser}
                     </p>
 
-                    {streak >= HISTORY_VISIBLE_FROM_STREAK && streakHistory.length > 0 && (
+                    {getCycleDay(streak) >= HISTORY_VISIBLE_FROM_STREAK && streakHistory.length > 0 && (
                       <div className="mt-4 rounded-[10px] border border-[#8b5a3c]/20 bg-[#fffdf8]/70 p-3">
                         <p className="text-center text-[10px] font-mono uppercase tracking-[0.3em] text-[#8b5a3c]">
                           This Week's Fortunes

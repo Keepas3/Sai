@@ -79,13 +79,13 @@ export const structure: StructureResolver = (S) =>
             ])
         ),
       S.listItem()
-        .title('Background Themes')
+        .title('Tetris Background Themes')
         .schemaType('backgroundTheme')
         .child(
           S.documentTypeList('backgroundTheme')
-            .title('Background Themes')
+            .title('Tetris Background Themes')
         ),
-        
+
       // 4. Active Projects
       S.listItem()
         .title('Projects')

@@ -19,9 +19,7 @@ interface BlogPost {
 
 function BlogPageContent() {
   const searchParams = useSearchParams();
-  const categoryParam = searchParams.get('category');
-  
-  const [activeCategory, setActiveCategory] = useState<string>(categoryParam || 'all');
+  const [activeCategory, setActiveCategory] = useState<string>(() => searchParams.get('category') || 'all');
   const [expandedMonths, setExpandedMonths] = useState<{ [key: string]: boolean }>({});
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isFeaturedOpen, setIsFeaturedOpen] = useState(true);
@@ -32,11 +30,8 @@ function BlogPageContent() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Update active category if URL param changes
-    if (categoryParam) {
-      setActiveCategory(categoryParam);
-    }
-  }, [categoryParam]);
+    setActiveCategory(searchParams.get('category') || 'all');
+  }, [searchParams]);
 
   useEffect(() => {
     async function fetchBlogData() {
@@ -280,27 +275,9 @@ function BlogPageContent() {
   );
 }
 
-// The actual page export. useSearchParams() (used inside BlogPageContent)
-// requires a Suspense boundary so this route can still be prerendered —
-// without it, the build fails trying to statically export this page since
-// the category comes from the URL at request/hydration time, not build time.
 export default function BlogPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="content-wrapper">
-          <Navbar />
-          <main className="page-container">
-            <h1 className="page-title">Blog Posts</h1>
-            <div className="status-box">
-              <p className="status-text italic text-white/30 text-center py-12">
-                Querying database records...
-              </p>
-            </div>
-          </main>
-        </div>
-      }
-    >
+    <Suspense fallback={null}>
       <BlogPageContent />
     </Suspense>
   );
