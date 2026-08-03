@@ -47,6 +47,12 @@ const STREAK_OMAMORI_MESSAGE_KEY = 'fortune-slip:streak-omamori-message';
 
 // From day 3 onward, show the fortunes collected so far this cycle.
 const HISTORY_VISIBLE_FROM_STREAK = 2;
+
+// Closing is ignored for this long after the popup opens, so a tap that
+// bleeds through right as it appears (e.g. an extra shake-tap landing on the
+// backdrop the instant it opens) can't dismiss it before it's even readable.
+// Roughly matches how long the unroll-in animation takes to settle.
+const MIN_VISIBLE_MS = 800;
 // The overall day-streak counts up indefinitely and never resets just for
 // reaching this — only missing a day resets it. What this controls is the
 // *cycle*: every time the streak hits a multiple of this many days, the
@@ -201,6 +207,10 @@ export default function FortuneSlip({
   // day 7 still shows the normal fortune content, same as any other day.
   const [isViewingRewardMessage, setIsViewingRewardMessage] = useState(false);
   const boxButtonRef = useRef<HTMLButtonElement | null>(null);
+  // Timestamp of the most recent open, so a stray tap landing right as the
+  // popup appears (e.g. the shake gesture's last tap bleeding through) can't
+  // dismiss it before the unroll animation even finishes.
+  const openedAtRef = useRef<number>(0);
 
   // Pick a random slip when the component mounts or when slips change
   useEffect(() => {
@@ -294,6 +304,7 @@ export default function FortuneSlip({
   }, [isOpen]);
 
   const handleClose = () => {
+    if (Date.now() - openedAtRef.current < MIN_VISIBLE_MS) return;
     setIsOpen(false);
     setIsShaking(false);
     setShakeCount(0);
@@ -333,6 +344,7 @@ export default function FortuneSlip({
         setIsShaking(false);
         setIsOpen(true);
         setIsViewingRewardMessage(false);
+        openedAtRef.current = Date.now();
 
         const now = Date.now();
         const nextTime = getNextPeriodBoundary(new Date(now));
@@ -417,6 +429,7 @@ export default function FortuneSlip({
     }
     setIsOpen(true);
     setIsViewingRewardMessage(true);
+    openedAtRef.current = Date.now();
   };
 
   const shakesRemaining = Math.max(shakesNeeded - shakeCount, 0);

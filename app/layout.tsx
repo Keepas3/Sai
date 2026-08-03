@@ -4,7 +4,7 @@ import { Comfortaa } from "next/font/google";
 
 // IMPORT YOUR SANITY CLIENT HERE (Adjust path if needed!)
 import { client } from "@/sanity/lib/client"; 
-
+import { Analytics } from "@vercel/analytics/next"
 import SakuraCanvas from "@/components/sai";
 import Footer from '@/components/Footer' 
 import { AudioProvider, TrackData } from '@/components/AudioContext';
@@ -58,7 +58,7 @@ export default async function RootLayout({
           </div>
           <NowPlayingWidget />
         </AudioProvider>
-        
+        <Analytics />
         <Footer />
       </body>
     </html>
