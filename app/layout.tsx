@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Comfortaa } from "next/font/google";
 
-// IMPORT YOUR SANITY CLIENT HERE (Adjust path if needed!)
 import { client } from "@/sanity/lib/client"; 
 import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import SakuraCanvas from "@/components/sai";
 import Footer from '@/components/Footer' 
 import { AudioProvider, TrackData } from '@/components/AudioContext';
@@ -59,6 +59,7 @@ export default async function RootLayout({
           <NowPlayingWidget />
         </AudioProvider>
         <Analytics />
+        <SpeedInsights />
         <Footer />
       </body>
     </html>
