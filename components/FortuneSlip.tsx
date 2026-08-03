@@ -23,7 +23,7 @@ interface FortuneSlipProps {
 // so you can click through several "days" in under a minute and watch the
 // streak history / 7-day omamori reward trigger. Set back to `false`
 // (or just delete this block) before shipping.
-const DEV_FAST_FORWARD = true;
+const DEV_FAST_FORWARD = false;
 const DEV_RESET_INTERVAL_MS = 15_000; // 15 seconds per "day" while testing
 // ---------------------------------------------------------------------------
 
