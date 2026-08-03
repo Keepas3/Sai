@@ -95,6 +95,7 @@ export default function TetrisModal({ isOpen, onClose }: TetrisModalProps) {
               position: 'relative',
               flex: 1, padding: '2rem 1.5rem', display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', minHeight: '650px',
+              maxHeight: '90vh', overflowY: 'auto',
               backgroundImage: isClassicTheme ? 'linear-gradient(to bottom, #121214, #0a0708)' : backgroundTheme.backgroundImage,
               backgroundColor: isClassicTheme ? undefined : backgroundTheme.backgroundColor,
               backgroundSize: 'cover',

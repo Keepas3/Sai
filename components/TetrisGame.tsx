@@ -103,14 +103,61 @@ const MiniPiece = ({ type }: { type: number | null }) => {
   return (
     <div style={{ display: 'grid', gap: '1px', gridTemplateColumns: `repeat(${matrix[0].length}, 1fr)` }}>
       {matrix.map((row, y) => row.map((val, x) => (
-        <div 
-          key={`${x}-${y}`} 
+        <div
+          key={`${x}-${y}`}
           style={{ width: '12px', height: '12px', borderRadius: '2px', backgroundColor: val ? COLORS[val] : 'transparent', boxShadow: val ? `0 0 8px ${COLORS[val]}` : 'none' }}
         />
       )))}
     </div>
   );
 };
+
+// On-screen control used only on mobile, where there's no keyboard to drive
+// the same move/rotate/drop/hold actions the desktop build binds to keydown.
+const TouchControlButton = ({
+  label,
+  ariaLabel,
+  onClick,
+  onPointerDown,
+  onPointerUp,
+  onPointerLeave,
+  onPointerCancel,
+}: {
+  label: string;
+  ariaLabel: string;
+  onClick?: () => void;
+  onPointerDown?: () => void;
+  onPointerUp?: () => void;
+  onPointerLeave?: () => void;
+  onPointerCancel?: () => void;
+}) => (
+  <button
+    type="button"
+    aria-label={ariaLabel}
+    onClick={onClick}
+    onPointerDown={onPointerDown ? (e) => { e.preventDefault(); onPointerDown(); } : undefined}
+    onPointerUp={onPointerUp}
+    onPointerLeave={onPointerLeave}
+    onPointerCancel={onPointerCancel}
+    style={{
+      flex: 1,
+      minWidth: 0,
+      padding: '14px 0',
+      fontSize: '1.1rem',
+      fontWeight: 'bold',
+      borderRadius: '10px',
+      border: '1px solid #e5729f',
+      backgroundColor: 'rgba(229,114,159,0.25)',
+      color: '#e5729f',
+      touchAction: 'manipulation',
+      WebkitUserSelect: 'none',
+      userSelect: 'none',
+      cursor: 'pointer',
+    }}
+  >
+    {label}
+  </button>
+);
 
 
 // ==========================================
@@ -177,8 +224,20 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     'Hard Drop': ' ', 'Hold': 'c' 
   });
   const controlsRef = useRef(controls);
-  
+
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  // Drives the mobile-only layout + on-screen touch controls below. Desktop
+  // rendering is untouched — every mobile-specific style is a ternary that
+  // falls back to the original desktop value when this is false.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 700px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     const savedTuning = localStorage.getItem('tetrisTuning');
@@ -605,6 +664,44 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     }
   };
 
+  // Mirrors the guard at the top of handleKeyDown, so on-screen touch
+  // buttons can't act while paused, in a menu, or before countdown ends.
+  const canAct = () => gameStateRef.current === 'PLAYING' && !isPausedRef.current && !showControlsRef.current;
+
+  // Touch equivalents of the keyboard handlers below — they drive the same
+  // keysDown/dasTimers refs the DAS/ARR loop in update() already reads, so
+  // holding a move button repeats exactly like holding the arrow key does.
+  const touchMoveStart = (dir: -1 | 1) => {
+    if (!canAct()) return;
+    if (dir === -1) keysDown.current.left = true; else keysDown.current.right = true;
+    dasTimers.current.das = 0;
+    dasTimers.current.arr = 0;
+    dasTimers.current.dcd = 0;
+    playerMove(dir);
+  };
+  const touchMoveEnd = (dir: -1 | 1) => {
+    if (dir === -1) keysDown.current.left = false; else keysDown.current.right = false;
+  };
+  const touchSoftDropStart = () => {
+    if (!canAct()) return;
+    keysDown.current.down = true;
+  };
+  const touchSoftDropEnd = () => {
+    keysDown.current.down = false;
+  };
+  const touchRotate = (dir: number) => {
+    if (!canAct()) return;
+    playerRotate(dir);
+  };
+  const touchHardDrop = () => {
+    if (!canAct()) return;
+    hardDrop();
+  };
+  const touchHold = () => {
+    if (!canAct()) return;
+    holdPiece();
+  };
+
   const drawMatrix = (ctx: CanvasRenderingContext2D, matrix: number[][], offset: { x: number, y: number }, isGhost = false) => {
     matrix.forEach((row, y) => {
       row.forEach((value, x) => {
@@ -845,30 +942,31 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
   }, []); 
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', gap: '3rem', alignItems: 'flex-start', justifyContent: 'center', fontFamily: 'monospace', userSelect: 'none', width: '100%', maxWidth: '48rem' }}>
-      
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? '0.6rem' : 0, width: '100%', maxWidth: isMobile ? '100%' : '48rem', fontFamily: 'monospace', userSelect: 'none' }}>
+    <div style={{ display: 'flex', flexDirection: 'row', gap: isMobile ? '0.5rem' : '3rem', alignItems: 'flex-start', justifyContent: 'center', width: '100%' }}>
+
       {/* Left Panel */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '7rem', paddingTop: '1rem', justifyContent: 'space-between', height: '600px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '0.5rem' : '1.5rem', width: isMobile ? '4rem' : '7rem', flexShrink: 0, paddingTop: isMobile ? 0 : '1rem', justifyContent: 'space-between', alignItems: 'stretch', height: isMobile ? 'auto' : '600px' }}>
         <div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textAlign: 'center', fontWeight: 'bold', margin: 0 }}>HOLD</p>
-            <div style={{ width: '7rem', height: '6rem', backgroundColor: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '0.4rem' : '0.75rem' }}>
+            <p style={{ fontSize: isMobile ? '0.55rem' : '0.75rem', color: 'rgba(255,255,255,0.7)', letterSpacing: '0.1em', textAlign: 'center', fontWeight: 'bold', margin: '0 auto', width: 'fit-content', padding: isMobile ? '1px 5px' : '2px 8px', backgroundColor: 'rgba(0,0,0,0.75)', borderRadius: '4px' }}>HOLD</p>
+            <div style={{ width: isMobile ? '4rem' : '7rem', height: isMobile ? '3.2rem' : '6rem', backgroundColor: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)' }}>
                <MiniPiece type={uiState.hold} />
             </div>
           </div>
-          
+
           {(gameState === 'PLAYING' || gameState === 'COUNTDOWN') && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1.5rem' }}>
-              <button 
-                onClick={() => { 
-                  if (gameState === 'COUNTDOWN') return; 
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: isMobile ? '0.6rem' : '1.5rem' }}>
+              <button
+                onClick={() => {
+                  if (gameState === 'COUNTDOWN') return;
                   const willShow = !showControlsRef.current;
                   showControlsRef.current = willShow;
-                  setShowControls(willShow); 
-                  isPausedRef.current = willShow; 
-                  setIsPaused(willShow); 
-                }} 
-                style={{ padding: '8px', backgroundColor: 'rgba(50,15,28,0.65)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                  setShowControls(willShow);
+                  isPausedRef.current = willShow;
+                  setIsPaused(willShow);
+                }}
+                style={{ padding: isMobile ? '5px 2px' : '8px', backgroundColor: 'rgba(50,15,28,0.65)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', cursor: 'pointer', fontSize: isMobile ? '8px' : '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}
               >
                 {showControls ? 'Resume' : 'Settings'}
               </button>
@@ -876,16 +974,16 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
           )}
         </div>
 
-        <button onClick={onMenu} style={{ padding: '8px', backgroundColor: 'rgba(50,15,28,0.65)', 
-          color: '#e5729f', border: '1px solid rgba(229,114,159,0.3)', borderRadius: '4px', 
-          cursor: 'pointer', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        <button onClick={onMenu} style={{ padding: isMobile ? '5px 2px' : '8px', backgroundColor: 'rgba(50,15,28,0.65)',
+          color: '#e5729f', border: '1px solid rgba(229,114,159,0.3)', borderRadius: '4px',
+          cursor: 'pointer', fontSize: isMobile ? '8px' : '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           Quit
         </button>
       </div>
 
       {/* Center Panel */}
       <div style={{ position: 'relative', border: '2px solid rgba(255,255,255,0.1)', backgroundColor: 'black', borderRadius: '0.5rem', boxShadow: '0 0 30px rgba(0,0,0,0.5)', overflow: 'hidden', flexShrink: 0 }}>
-        <canvas ref={canvasRef} width={300} height={600} style={{ display: 'block' }} />
+        <canvas ref={canvasRef} width={300} height={600} style={isMobile ? { display: 'block', width: 'min(190px, calc(100vw - 224px))', height: 'auto' } : { display: 'block' }} />
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', backgroundImage: 'linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px)', backgroundSize: '100% 4px' }} />
 
         {/* COUNTDOWN OVERLAY */}
@@ -1042,28 +1140,31 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
       </div>
 
       {/* Right Panel */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', width: '7rem', paddingTop: '1rem', height: '600px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textAlign: 'center', fontWeight: 'bold', margin: 0 }}>NEXT</p>
-          <div style={{ width: '7rem', backgroundColor: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.375rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 0', gap: '1.5rem', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)', margin: '0 auto' }}>
-             {uiState.next.map((type, idx) => <MiniPiece key={idx} type={type} />)}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '0.5rem' : '2rem', width: isMobile ? '4rem' : '7rem', flexShrink: 0, paddingTop: isMobile ? 0 : '1rem', alignItems: 'stretch', justifyContent: 'flex-start', height: isMobile ? 'auto' : '600px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '0.4rem' : '0.75rem' }}>
+          <p style={{ fontSize: isMobile ? '0.55rem' : '0.75rem', color: 'rgba(255,255,255,0.7)', letterSpacing: '0.1em', textAlign: 'center', fontWeight: 'bold', margin: '0 auto', width: 'fit-content', padding: isMobile ? '1px 5px' : '2px 8px', backgroundColor: 'rgba(0,0,0,0.75)', borderRadius: '4px' }}>NEXT</p>
+          <div style={{ width: isMobile ? '4rem' : '7rem', backgroundColor: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.375rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '0.4rem 0' : '1rem 0', gap: isMobile ? '0.4rem' : '1.5rem', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)', margin: '0 auto' }}>
+             {uiState.next.slice(0, isMobile ? 3 : 5).map((type, idx) => <MiniPiece key={idx} type={type} />)}
           </div>
         </div>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem', paddingRight: '0.5rem', textAlign: 'right', flex: 1 }}>
-          
+
+        {/* Solid backdrop (matching the Hold/Next boxes) so these numbers stay
+            readable no matter how bright or busy the selected background is —
+            plain text sitting directly on the theme image used to wash out. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '0.5rem' : '1rem', backgroundColor: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.375rem', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)', padding: isMobile ? '0.4rem 0.35rem' : '1rem 0.85rem', textAlign: 'right', flex: 1 }}>
+
           {/* --- UI RENDER BRANCHING --- */}
           {mode === 'sprint' ? (
             <>
               <div>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Time</p>
-                <p ref={timeDisplayRef} style={{ fontSize: '1.125rem', color: '#e5729f', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.5)', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Time</p>
+                <p ref={timeDisplayRef} style={{ fontSize: isMobile ? '0.8rem' : '1.125rem', color: '#e5729f', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.5)', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
                   00:00.000
                 </p>
               </div>
               <div>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines Left</p>
-                <p style={{ fontSize: '1.25rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0 }}>
+                <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines Left</p>
+                <p style={{ fontSize: isMobile ? '0.9rem' : '1.25rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0 }}>
                   {Math.max(0, SPRINT_GOAL - uiState.lines)}
                 </p>
               </div>
@@ -1071,46 +1172,87 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
           ) : mode === 'blitz' ? (
             <>
               <div>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Score</p>
-                <p style={{ fontSize: '1.25rem', color: '#e5729f', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.5)', margin: 0 }}>{uiState.score}</p>
+                <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Score</p>
+                <p style={{ fontSize: isMobile ? '0.9rem' : '1.25rem', color: '#e5729f', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.5)', margin: 0 }}>{uiState.score}</p>
               </div>
               <div>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Time Left</p>
-                <p ref={timeDisplayRef} style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Time Left</p>
+                <p ref={timeDisplayRef} style={{ fontSize: isMobile ? '0.8rem' : '1.125rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
                   03:00.000
                 </p>
               </div>
               <div>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines</p>
-                <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0 }}>{uiState.lines}</p>
+                <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines</p>
+                <p style={{ fontSize: isMobile ? '0.8rem' : '1.125rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0 }}>{uiState.lines}</p>
               </div>
             </>
           ) : (
             <>
               <div>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Score</p>
-                <p style={{ fontSize: '1.25rem', color: '#e5729f', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.5)', margin: 0 }}>{uiState.score}</p>
+                <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Score</p>
+                <p style={{ fontSize: isMobile ? '0.9rem' : '1.25rem', color: '#e5729f', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.5)', margin: 0 }}>{uiState.score}</p>
               </div>
               <div>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Level</p>
-                <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0 }}>{uiState.level}</p>
+                <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Level</p>
+                <p style={{ fontSize: isMobile ? '0.8rem' : '1.125rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0 }}>{uiState.level}</p>
               </div>
               <div>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines</p>
-                <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold', margin: 0 }}>{uiState.lines}</p>
+                <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines</p>
+                <p style={{ fontSize: isMobile ? '0.8rem' : '1.125rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0 }}>{uiState.lines}</p>
               </div>
             </>
           )}
-          
-          <div style={{ marginTop: 'auto', minHeight: '4rem', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+
+          <div style={{ marginTop: 'auto', minHeight: isMobile ? '1rem' : '4rem', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
             {uiState.actionText && (
-               <p style={{ color: '#e5729f', fontSize: '11px', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.8)', margin: 0, lineHeight: 1.4, textTransform: 'uppercase' }}>
+               <p style={{ color: '#e5729f', fontSize: isMobile ? '8px' : '11px', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.8)', margin: 0, lineHeight: 1.4, textTransform: 'uppercase' }}>
                  {uiState.actionText.split('\n').map((line, i) => <React.Fragment key={i}>{line}<br/></React.Fragment>)}
                </p>
             )}
           </div>
         </div>
       </div>
+
+    </div>{/* end inner row (Left Panel / Center Panel / Right Panel) */}
+
+      {/* Touch controls — mobile only. There's no keyboard on a phone, so
+          this is the only way to move/rotate/drop/hold there. */}
+      {isMobile && (gameState === 'PLAYING' || gameState === 'COUNTDOWN') && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', maxWidth: '300px' }}>
+          <div style={{ display: 'flex', gap: '0.6rem' }}>
+            <TouchControlButton label="HOLD" ariaLabel="Hold piece" onClick={touchHold} />
+            <TouchControlButton label="⟲" ariaLabel="Rotate counter-clockwise" onClick={() => touchRotate(-1)} />
+            <TouchControlButton label="⟳" ariaLabel="Rotate clockwise" onClick={() => touchRotate(1)} />
+            <TouchControlButton label="DROP" ariaLabel="Hard drop" onClick={touchHardDrop} />
+          </div>
+          <div style={{ display: 'flex', gap: '0.6rem' }}>
+            <TouchControlButton
+              label="◀"
+              ariaLabel="Move left"
+              onPointerDown={() => touchMoveStart(-1)}
+              onPointerUp={() => touchMoveEnd(-1)}
+              onPointerLeave={() => touchMoveEnd(-1)}
+              onPointerCancel={() => touchMoveEnd(-1)}
+            />
+            <TouchControlButton
+              label="▼"
+              ariaLabel="Soft drop"
+              onPointerDown={touchSoftDropStart}
+              onPointerUp={touchSoftDropEnd}
+              onPointerLeave={touchSoftDropEnd}
+              onPointerCancel={touchSoftDropEnd}
+            />
+            <TouchControlButton
+              label="▶"
+              ariaLabel="Move right"
+              onPointerDown={() => touchMoveStart(1)}
+              onPointerUp={() => touchMoveEnd(1)}
+              onPointerLeave={() => touchMoveEnd(1)}
+              onPointerCancel={() => touchMoveEnd(1)}
+            />
+          </div>
+        </div>
+      )}
 
     </div>
   );
