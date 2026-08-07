@@ -19,6 +19,28 @@ interface ScoreEntry {
 const MAX_LEADERBOARD = 8;
 const SPRINT_GOAL = 40;
 const BLITZ_TIME_LIMIT = 3 * 60 * 1000; // 3 minutes in milliseconds
+// Piece type (matches PIECES/COLORS indexing) paired with its rebindable
+// action name — defaults to keys 1-7 in that same order (I, O, T, S, Z, J, L).
+const SPAWN_HOTKEY_ACTIONS = [
+  { type: 1, action: 'Spawn I' as const },
+  { type: 2, action: 'Spawn O' as const },
+  { type: 3, action: 'Spawn T' as const },
+  { type: 4, action: 'Spawn S' as const },
+  { type: 5, action: 'Spawn Z' as const },
+  { type: 6, action: 'Spawn J' as const },
+  { type: 7, action: 'Spawn L' as const },
+];
+
+// The board-level (non-piece) sandbox hotkeys, shown in their own small grid.
+const SANDBOX_GENERAL_HOTKEY_ACTIONS = ['Clear Board', 'Toggle 0-G'] as const;
+
+// Every sandbox-only action name (general + piece), rebindable the same way
+// as the regular keybinds but kept out of the main Keybinds grid since they
+// only do anything in standard/sandbox mode.
+const SANDBOX_HOTKEY_ACTIONS = [
+  ...SANDBOX_GENERAL_HOTKEY_ACTIONS,
+  ...SPAWN_HOTKEY_ACTIONS.map((p) => p.action),
+] as const;
 
 // ==========================================
 // 1. PURE ENGINE FUNCTIONS
@@ -212,16 +234,31 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
   const isPausedRef = useRef(false);
   const [showControls, setShowControls] = useState(false);
   const showControlsRef = useRef(false);
+  // Which content the pause overlay shows — the regular keybinds/handling
+  // settings, or (sandbox mode only) the gravity/board tools. Both share the
+  // same overlay + pause mechanism, just different buttons open different tabs.
+  const [settingsTab, setSettingsTab] = useState<'controls' | 'sandbox'>('controls');
+  // True gravity-off: the piece never auto-falls until soft/hard-dropped.
+  // Distinct from the gravity slider's fast end (which still ticks, just
+  // near-instantly) — this sets dropInterval to Infinity so it never ticks.
+  const [zeroGravity, setZeroGravity] = useState(false);
+  const zeroGravityRef = useRef(false);
   const [listeningAction, setListeningAction] = useState<string | null>(null);
   const listeningActionRef = useRef<string | null>(null);
   
   const [tuning, setTuning] = useState({ das: 170, arr: 30, dcd: 0, sdf: 40 });
   const tuningRef = useRef(tuning);
   
-  const [controls, setControls] = useState({ 
-    'Left': 'ArrowLeft', 'Right': 'ArrowRight', 'Down': 'ArrowDown', 
-    'Rotate CW': 'ArrowUp', 'Rotate CCW': 'z', 'Rotate 180': 'a', 
-    'Hard Drop': ' ', 'Hold': 'c' 
+  const [controls, setControls] = useState({
+    'Left': 'ArrowLeft', 'Right': 'ArrowRight', 'Down': 'ArrowDown',
+    'Rotate CW': 'ArrowUp', 'Rotate CCW': 'z', 'Rotate 180': 'a',
+    'Hard Drop': ' ', 'Hold': 'c',
+    // Sandbox-only hotkeys — rebindable the same way as the rest, but kept
+    // out of the main Keybinds grid (see SANDBOX_HOTKEY_ACTIONS) since they
+    // only do anything in standard/sandbox mode.
+    'Clear Board': 'r', 'Toggle 0-G': 'g',
+    'Spawn I': '1', 'Spawn O': '2', 'Spawn T': '3', 'Spawn S': '4',
+    'Spawn Z': '5', 'Spawn J': '6', 'Spawn L': '7',
   });
   const controlsRef = useRef(controls);
 
@@ -247,7 +284,11 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
       try { setTuning(JSON.parse(savedTuning)); } catch (e) { console.error('Failed to parse tuning'); }
     }
     if (savedControls) {
-      try { setControls(JSON.parse(savedControls)); } catch (e) { console.error('Failed to parse controls'); }
+      // Merge onto the defaults rather than replacing outright — a saved
+      // object from before the sandbox hotkeys existed wouldn't have those
+      // keys, and indexing a missing key later (e.g. `.replace()` on it in
+      // the Hotkeys UI) would throw.
+      try { setControls(prev => ({ ...prev, ...JSON.parse(savedControls) })); } catch (e) { console.error('Failed to parse controls'); }
     }
     setSettingsLoaded(true);
   }, []);
@@ -320,7 +361,9 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
   };
 
   useEffect(() => {
-    fetchLeaderboard();
+    // Sandbox (standard) mode doesn't score or compete, so there's no
+    // leaderboard to show or fetch for it.
+    if (mode !== 'standard') fetchLeaderboard();
   }, [mode]);
 
   const saveHighScore = async () => {
@@ -371,8 +414,27 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
   };
 
   const handleGameOver = (isWin: boolean) => {
+    if (mode === 'standard') {
+      // Sandbox mode never really "ends" — topping out just clears the
+      // board and play continues immediately, with no leaderboard/name-entry
+      // interruption. Gravity/level stays at whatever the player dialed in.
+      board.current = createMatrix(COLS, ROWS);
+      comboRef.current = -1;
+      b2bRef.current = false;
+      dropCounter.current = 0;
+      // Restart the practice stopwatch — set to 0 here so update() reinitializes
+      // it from the current frame's time next tick; the direct innerText write
+      // avoids a one-frame flash of the old elapsed value in the meantime.
+      gameStartTimeRef.current = 0;
+      if (timeDisplayRef.current) timeDisplayRef.current.innerText = '00:00.000';
+      actionTextRef.current = { text: 'Board Cleared', timer: 1200 };
+      playerReset();
+      syncUi();
+      return;
+    }
+
     const currentScore = mode === 'sprint' ? elapsedTimeRef.current : scoreRef.current;
-    scoreRef.current = currentScore; 
+    scoreRef.current = currentScore;
 
     if (mode === 'sprint' && !isWin) {
       setGameState('LEADERBOARD');
@@ -497,14 +559,18 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
         actionStr += `\n${comboRef.current} Combo`;
       }
 
-      if (mode !== 'sprint') {
+      if (mode === 'blitz' || mode === 'standard') {
         scoreRef.current += calculatedScore;
       }
-      
+
       linesRef.current += linesCleared;
-      levelRef.current = Math.floor(linesRef.current / 10) + 1; 
-      dropInterval.current = calculateDropInterval(levelRef.current);
-      
+      // Sandbox mode's gravity is whatever the player dialed in via the
+      // settings panel — it shouldn't creep up on its own from lines cleared.
+      if (mode !== 'standard') {
+        levelRef.current = Math.floor(linesRef.current / 10) + 1;
+        dropInterval.current = calculateDropInterval(levelRef.current);
+      }
+
       if (actionStr) actionTextRef.current = { text: actionStr, timer: 2000 };
 
       if (mode === 'sprint' && linesRef.current >= SPRINT_GOAL) {
@@ -515,7 +581,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     } else {
       comboRef.current = -1;
       if (tSpin) {
-        if (mode !== 'sprint') scoreRef.current += 400 * levelRef.current;
+        if (mode === 'blitz' || mode === 'standard') scoreRef.current += 400 * levelRef.current;
         actionTextRef.current = { text: 'T-SPIN', timer: 1500 };
       }
     }
@@ -543,19 +609,19 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
       }
       droppedThisFrame++;
     }
-    if (isSoftDrop && droppedThisFrame > 0 && mode !== 'sprint') {
-      scoreRef.current += droppedThisFrame; 
+    if (isSoftDrop && droppedThisFrame > 0 && (mode === 'blitz' || mode === 'standard')) {
+      scoreRef.current += droppedThisFrame;
       syncUi();
     }
   };
 
   const hardDrop = () => {
     const now = performance.now();
-    if (now - lastHardDropTimeRef.current < 100) return; 
+    if (now - lastHardDropTimeRef.current < 100) return;
     lastHardDropTimeRef.current = now;
 
     const dist = getGhostY() - player.current.pos.y;
-    if (mode !== 'sprint') scoreRef.current += dist * 2; 
+    if (mode === 'blitz' || mode === 'standard') scoreRef.current += dist * 2;
     player.current.pos.y += dist; 
     lastMoveRef.current = 'drop';
     lockPiece(); 
@@ -664,6 +730,75 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     }
   };
 
+  // Sandbox-only: forces the currently falling piece to become a specific
+  // type, for practicing a setup that needs a particular piece right now.
+  // Doesn't touch the next-piece queue, so the upcoming bag order is
+  // unaffected — only this one piece is overridden.
+  const spawnSandboxPiece = (type: number) => {
+    if (mode !== 'standard') return;
+    if (gameStateRef.current !== 'PLAYING') return;
+
+    const matrix = PIECES[type];
+    const pos = { x: Math.floor(COLS / 2) - Math.floor(matrix[0].length / 2), y: 0 };
+    if (collide(board.current, { matrix, pos })) return; // no room to force-spawn right now
+
+    player.current.type = type;
+    player.current.matrix = matrix;
+    player.current.pos = pos;
+    player.current.rotState = 0;
+
+    lowestYRef.current = player.current.pos.y;
+    lockResetsRef.current = 0;
+    dropCounter.current = 0;
+
+    canHoldRef.current = true;
+    isLockingRef.current = false;
+    lockTimerRef.current = 0;
+    lastMoveRef.current = null;
+    syncUi();
+  };
+
+  // Sandbox-only: wipes the board on demand, reusing handleGameOver's
+  // standard-mode branch (auto-clear-and-continue) instead of duplicating it.
+  const clearSandboxBoard = () => handleGameOver(true);
+
+  // Opens the pause overlay on a specific tab, or closes it if that same tab
+  // is already showing — each of the two Left Panel buttons (Settings /
+  // Sandbox) calls this with its own tab, so they act as independent toggles
+  // that share one underlying pause overlay.
+  const openPanel = (tab: 'controls' | 'sandbox') => {
+    if (gameState === 'COUNTDOWN') return;
+    if (showControlsRef.current && settingsTab === tab) {
+      showControlsRef.current = false;
+      setShowControls(false);
+      isPausedRef.current = false;
+      setIsPaused(false);
+    } else {
+      setSettingsTab(tab);
+      showControlsRef.current = true;
+      setShowControls(true);
+      isPausedRef.current = true;
+      setIsPaused(true);
+    }
+  };
+
+  // Toggles true zero-gravity: dropInterval becomes Infinity so the drop
+  // timer (dropCounter > dropInterval) can never trip — the piece only moves
+  // down via soft/hard drop. Turning it off restores the slider's level.
+  //
+  // Reads zeroGravityRef (not the zeroGravity state var) because this
+  // function is called from handleKeyDown, which lives inside a
+  // mount-only useEffect and therefore only ever sees the very first
+  // render's closure. Reading state directly there would freeze `next` at
+  // whatever it was on mount — the ref is a mutable box every closure reads
+  // fresh, so it stays correct no matter how stale the calling closure is.
+  const toggleZeroGravity = () => {
+    const next = !zeroGravityRef.current;
+    setZeroGravity(next);
+    zeroGravityRef.current = next;
+    dropInterval.current = next ? Infinity : calculateDropInterval(levelRef.current);
+  };
+
   // Mirrors the guard at the top of handleKeyDown, so on-screen touch
   // buttons can't act while paused, in a menu, or before countdown ends.
   const canAct = () => gameStateRef.current === 'PLAYING' && !isPausedRef.current && !showControlsRef.current;
@@ -745,24 +880,33 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
     lastTime.current = time;
 
     if (gameStateRef.current === 'PLAYING') {
-      
+      // Labeled so the Blitz-timeout branch below can bail out of just this
+      // frame's game logic with `break`. It used to `return` here, which
+      // exited update() itself and skipped the requestAnimationFrame(update)
+      // call at the very bottom of this function — permanently killing the
+      // game loop the instant Blitz's clock hit zero, so no amount of
+      // clicking "Play Again" afterward could ever resume it.
+      playingFrame: {
+
       if (gameStartTimeRef.current === 0) {
         gameStartTimeRef.current = time;
       }
-      
+
       if (!isPausedRef.current && !showControlsRef.current) {
         elapsedTimeRef.current = time - gameStartTimeRef.current;
-        
-        if (mode === 'sprint' && timeDisplayRef.current) {
+
+        if ((mode === 'sprint' || mode === 'standard') && timeDisplayRef.current) {
+           // Sandbox's stopwatch just counts up, same as Sprint's — it's
+           // reset (not stopped) whenever the board clears, in handleGameOver.
            timeDisplayRef.current.innerText = formatTime(elapsedTimeRef.current);
         } else if (mode === 'blitz' && timeDisplayRef.current) {
            // --- NEW: BLITZ TIMER LOGIC ---
            const timeLeft = Math.max(0, BLITZ_TIME_LIMIT - elapsedTimeRef.current);
            timeDisplayRef.current.innerText = formatTime(timeLeft);
-           
+
            if (timeLeft === 0) {
               handleGameOver(true);
-              return; // Halt the update loop
+              break playingFrame;
            }
         }
       }
@@ -802,13 +946,18 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
         }
 
         if (keysDown.current.down) {
-           if (tuningRef.current.sdf >= 41) {
+           // With 0-G, dropInterval is Infinity, so the dropCounter-based
+           // accumulation below can never trip — soft drop would silently do
+           // nothing at less-than-max SDF. Route it through the same instant
+           // ghost-jump the max-SDF case already uses, so holding down always
+           // fully drops the piece regardless of the SDF setting.
+           if (tuningRef.current.sdf >= 41 || zeroGravityRef.current) {
               const dist = getGhostY() - player.current.pos.y;
               if (dist > 0) {
-                if (mode !== 'sprint') scoreRef.current += dist; 
-                player.current.pos.y += dist; 
+                if (mode === 'blitz' || mode === 'standard') scoreRef.current += dist;
+                player.current.pos.y += dist;
                 lastMoveRef.current = 'drop';
-                syncUi(); 
+                syncUi();
               }
            } else {
               dropCounter.current += deltaTime * tuningRef.current.sdf; 
@@ -850,6 +999,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
           }
         }
       }
+      } // end playingFrame
     }
 
     const canvas = canvasRef.current;
@@ -920,6 +1070,12 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
         }
       }
       else if (e.key === c['Hold']) holdPiece();
+      else if (mode === 'standard' && e.key === c['Clear Board']) clearSandboxBoard();
+      else if (mode === 'standard' && e.key === c['Toggle 0-G']) toggleZeroGravity();
+      else if (mode === 'standard') {
+        const pieceHotkey = SPAWN_HOTKEY_ACTIONS.find((p) => e.key === c[p.action]);
+        if (pieceHotkey) spawnSandboxPiece(pieceHotkey.type);
+      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -958,18 +1114,19 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
           {(gameState === 'PLAYING' || gameState === 'COUNTDOWN') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: isMobile ? '0.6rem' : '1.5rem' }}>
               <button
-                onClick={() => {
-                  if (gameState === 'COUNTDOWN') return;
-                  const willShow = !showControlsRef.current;
-                  showControlsRef.current = willShow;
-                  setShowControls(willShow);
-                  isPausedRef.current = willShow;
-                  setIsPaused(willShow);
-                }}
+                onClick={() => openPanel('controls')}
                 style={{ padding: isMobile ? '5px 2px' : '8px', backgroundColor: 'rgba(50,15,28,0.65)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', cursor: 'pointer', fontSize: isMobile ? '8px' : '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}
               >
-                {showControls ? 'Resume' : 'Settings'}
+                {showControls && settingsTab === 'controls' ? 'Resume' : 'Settings'}
               </button>
+              {mode === 'standard' && (
+                <button
+                  onClick={() => openPanel('sandbox')}
+                  style={{ padding: isMobile ? '5px 2px' : '8px', backgroundColor: 'rgba(50,15,28,0.65)', color: '#e5729f', border: '1px solid rgba(229,114,159,0.3)', borderRadius: '4px', cursor: 'pointer', fontSize: isMobile ? '8px' : '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                >
+                  {showControls && settingsTab === 'sandbox' ? 'Resume' : 'Sandbox'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -997,7 +1154,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
 
         {/* HIGH SCORE ENTRY OVERLAY */}
         {gameState === 'NAME_ENTRY' && (
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 30, padding: '2rem' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 30, padding: '2rem', overflowY: 'auto' }}>
              <h3 style={{ color: '#e5729f', letterSpacing: '0.1em', marginBottom: '1rem', marginTop: 0, fontSize: '1.25rem', textAlign: 'center' }}>
                {mode === 'sprint' ? 'NEW BEST TIME!' : 'NEW HIGH SCORE!'}
              </h3>
@@ -1022,7 +1179,7 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
 
         {/* LEADERBOARD OVERLAY */}
         {gameState === 'LEADERBOARD' && (
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 30, padding: '2rem 1.5rem' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 30, padding: '2rem 1.5rem', overflowY: 'auto' }}>
             <h3 style={{ color: 'white', letterSpacing: '0.2em', marginBottom: '1.5rem', marginTop: 0, fontSize: '1.25rem', textShadow: '0 0 10px rgba(255,255,255,0.3)' }}>LEADERBOARD</h3>
             
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
@@ -1064,73 +1221,174 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
         {showControls && (gameState === 'PLAYING' || gameState === 'COUNTDOWN') && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20, padding: '2rem 1.5rem', overflowY: 'auto' }}>
             
-            <h3 style={{ color: 'white', backgroundColor: 'rgba(50,15,28,0.65)', border: '1px solid #e5729f', letterSpacing: '0.2em', marginBottom: '1.2rem', marginTop: 0, fontSize: '1.1rem' }}>Settings</h3>
-            
-            <p style={{ color: '#e5729f', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 0.75rem 0', alignSelf: 'flex-start' }}>Keybinds</p>
-            <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '1.5rem' }}>
-              {Object.entries(controls)
-                .filter(([action]) => action !== 'null') 
-                .map(([action, keyName]) => (
-                <div key={action} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '9px', textTransform: 'uppercase', textAlign: 'center' }}>
-                    {action}
-                  </span>
-                  <button
-                    onClick={() => {
-                      setListeningAction(action);
-                      listeningActionRef.current = action;
+            <h3 style={{ color: 'white', border: 'rgba(235, 15, 96, 0.65)', letterSpacing: '0.25em', marginBottom: '1.2rem', marginTop: 0, fontSize: '1.1rem' }}>
+              {settingsTab === 'sandbox' ? 'Sandbox' : 'Settings'}
+            </h3>
+
+            {settingsTab === 'controls' && (
+              <>
+                <p style={{ color: '#e5729f', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 0.75rem 0', alignSelf: 'flex-start' }}>Keybinds</p>
+                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '1.5rem' }}>
+                  {Object.entries(controls)
+                    .filter(([action]) => action !== 'null' && !(SANDBOX_HOTKEY_ACTIONS as readonly string[]).includes(action))
+                    .map(([action, keyName]) => (
+                    <div key={action} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '9px', textTransform: 'uppercase', textAlign: 'center' }}>
+                        {action}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setListeningAction(action);
+                          listeningActionRef.current = action;
+                        }}
+                        style={{ backgroundColor: listeningAction === action ? '#e5729f' : 'rgba(255,255,255,0.1)', color: 'white', border: 'none', borderRadius: '4px', padding: '6px', fontSize: '10px', cursor: 'pointer', width: '100%', maxWidth: '90px', textAlign: 'center', height: '26px' }}
+                      >
+                        {listeningAction === action ? '...' : (keyName === ' ' ? 'Space' : keyName.replace('Arrow', ''))}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
+                  <p style={{ color: '#e5729f', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', margin: 0 }}>Handling</p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>DAS (Delay)</span>
+                      <span style={{ color: 'white', fontSize: '10px' }}>{tuning.das}ms</span>
+                    </div>
+                    <input type="range" min="50" max="300" step="10" value={tuning.das} onChange={(e) => setTuning(p => ({...p, das: Number(e.target.value)}))} style={{ width: '100%', accentColor: '#e5729f', height: '4px' }} />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>ARR (Speed)</span>
+                      <span style={{ color: 'white', fontSize: '10px' }}>{tuning.arr}ms</span>
+                    </div>
+                    <input type="range" min="0" max="100" step="1" value={tuning.arr} onChange={(e) => setTuning(p => ({...p, arr: Number(e.target.value)}))} style={{ width: '100%', accentColor: '#e5729f', height: '4px' }} />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>DCD (DAS Cut)</span>
+                      <span style={{ color: 'white', fontSize: '10px' }}>{tuning.dcd}ms</span>
+                    </div>
+                    <input type="range" min="0" max="100" step="1" value={tuning.dcd} onChange={(e) => setTuning(p => ({...p, dcd: Number(e.target.value)}))} style={{ width: '100%', accentColor: '#e5729f', height: '4px' }} />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>SDF (Soft Drop)</span>
+                      <span style={{ color: 'white', fontSize: '10px' }}>{tuning.sdf >= 41 ? 'MAX' : `${tuning.sdf}x`}</span>
+                    </div>
+                    <input type="range" min="2" max="41" step="1" value={tuning.sdf} onChange={(e) => setTuning(p => ({...p, sdf: Number(e.target.value)}))} style={{ width: '100%', accentColor: '#e5729f', height: '4px' }} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {settingsTab === 'sandbox' && mode === 'standard' && (
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', opacity: zeroGravity ? 0.4 : 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>Gravity Level</span>
+                    <span style={{ color: 'white', fontSize: '10px' }}>{uiState.level}</span>
+                  </div>
+                  <input
+                    type="range" min="1" max="20" step="1"
+                    value={uiState.level}
+                    onChange={(e) => {
+                      const level = Number(e.target.value);
+                      levelRef.current = level;
+                      if (zeroGravity) { setZeroGravity(false); zeroGravityRef.current = false; }
+                      dropInterval.current = calculateDropInterval(level);
+                      syncUi();
                     }}
-                    style={{ backgroundColor: listeningAction === action ? '#e5729f' : 'rgba(255,255,255,0.1)', color: 'white', border: 'none', borderRadius: '4px', padding: '6px', fontSize: '10px', cursor: 'pointer', width: '100%', maxWidth: '90px', textAlign: 'center', height: '26px' }}
-                  >
-                    {listeningAction === action ? '...' : (keyName === ' ' ? 'Space' : keyName.replace('Arrow', ''))}
-                  </button>
+                    style={{ width: '100%', accentColor: '#e5729f', height: '4px' }}
+                  />
                 </div>
-              ))}
-            </div>
 
-            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
-              <p style={{ color: '#e5729f', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', margin: 0 }}>Handling</p>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>DAS (Delay)</span>
-                  <span style={{ color: 'white', fontSize: '10px' }}>{tuning.das}ms</span>
+                <button
+                  onClick={toggleZeroGravity}
+                  style={{
+                    backgroundColor: zeroGravity ? 'rgba(229,114,159,0.25)' : 'rgba(255,255,255,0.1)',
+                    color: zeroGravity ? '#e5729f' : 'white',
+                    border: zeroGravity ? '1px solid #e5729f' : '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '4px', padding: '8px', cursor: 'pointer', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.1em',
+                  }}
+                >
+                  {zeroGravity ? 'Zero-G Enabled — Tap to Disable' : 'Enable Zero-G (No Gravity)'}
+                </button>
+
+                <button
+                  onClick={clearSandboxBoard}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px', padding: '8px', cursor: 'pointer', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                >
+                  Clear Board
+                </button>
+
+                <div>
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', display: 'block', marginBottom: '8px' }}>Spawn Piece</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                    {SPAWN_HOTKEY_ACTIONS.map(({ type, action }) => (
+                      <div key={type} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                        <button
+                          onClick={() => {
+                            spawnSandboxPiece(type);
+                            showControlsRef.current = false;
+                            setShowControls(false);
+                            isPausedRef.current = false;
+                            setIsPaused(false);
+                          }}
+                          style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px', padding: '6px', cursor: 'pointer', width: '100%', aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <MiniPiece type={type} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setListeningAction(action);
+                            listeningActionRef.current = action;
+                          }}
+                          style={{ backgroundColor: listeningAction === action ? '#e5729f' : 'rgba(255,255,255,0.1)', color: 'white', border: 'none', borderRadius: '4px', padding: '4px', fontSize: '10px', cursor: 'pointer', width: '100%', textAlign: 'center', height: '22px' }}
+                        >
+                          {listeningAction === action ? '...' : (controls[action] === ' ' ? 'Space' : controls[action].replace('Arrow', ''))}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <input type="range" min="50" max="300" step="10" value={tuning.das} onChange={(e) => setTuning(p => ({...p, das: Number(e.target.value)}))} style={{ width: '100%', accentColor: '#e5729f', height: '4px' }} />
+
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.85rem' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', display: 'block' }}>Hotkeys</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                    {SANDBOX_GENERAL_HOTKEY_ACTIONS.map((action) => (
+                      <div key={action} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '9px', textTransform: 'uppercase', textAlign: 'center' }}>
+                          {action}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setListeningAction(action);
+                            listeningActionRef.current = action;
+                          }}
+                          style={{ backgroundColor: listeningAction === action ? '#e5729f' : 'rgba(255,255,255,0.1)', color: 'white', border: 'none', borderRadius: '4px', padding: '6px', fontSize: '10px', cursor: 'pointer', width: '100%', maxWidth: '90px', textAlign: 'center', height: '26px' }}
+                        >
+                          {listeningAction === action ? '...' : (controls[action] === ' ' ? 'Space' : controls[action].replace('Arrow', ''))}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
+            )}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>ARR (Speed)</span>
-                  <span style={{ color: 'white', fontSize: '10px' }}>{tuning.arr}ms</span>
-                </div>
-                <input type="range" min="0" max="100" step="1" value={tuning.arr} onChange={(e) => setTuning(p => ({...p, arr: Number(e.target.value)}))} style={{ width: '100%', accentColor: '#e5729f', height: '4px' }} />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>DCD (DAS Cut)</span>
-                  <span style={{ color: 'white', fontSize: '10px' }}>{tuning.dcd}ms</span>
-                </div>
-                <input type="range" min="0" max="100" step="1" value={tuning.dcd} onChange={(e) => setTuning(p => ({...p, dcd: Number(e.target.value)}))} style={{ width: '100%', accentColor: '#e5729f', height: '4px' }} />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>SDF (Soft Drop)</span>
-                  <span style={{ color: 'white', fontSize: '10px' }}>{tuning.sdf >= 41 ? 'MAX' : `${tuning.sdf}x`}</span>
-                </div>
-                <input type="range" min="2" max="41" step="1" value={tuning.sdf} onChange={(e) => setTuning(p => ({...p, sdf: Number(e.target.value)}))} style={{ width: '100%', accentColor: '#e5729f', height: '4px' }} />
-              </div>
-            </div>
-
-            <button 
+            <button
               onClick={() => {
                 showControlsRef.current = false;
                 setShowControls(false);
                 isPausedRef.current = false;
                 setIsPaused(false);
-              }} 
+              }}
               style={{ marginTop: '1.5rem', backgroundColor: '#e5729f', color: 'white', border: 'none', borderRadius: '4px', padding: '8px 24px', cursor: 'pointer', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.1em' }}
             >
               Done
@@ -1187,14 +1445,24 @@ export default function TetrisGame({ mode, onMenu }: TetrisGameProps) {
               </div>
             </>
           ) : (
+            // Sandbox mode: score is back (good for testing combos/B2B/the
+            // point system) but there's still no leaderboard for it — plus a
+            // practice stopwatch (resets whenever the board clears, see
+            // handleGameOver), the gravity level, and a lines-cleared tally.
             <>
               <div>
                 <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Score</p>
                 <p style={{ fontSize: isMobile ? '0.9rem' : '1.25rem', color: '#e5729f', fontWeight: 'bold', textShadow: '0 0 8px rgba(229,114,159,0.5)', margin: 0 }}>{uiState.score}</p>
               </div>
               <div>
-                <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Level</p>
-                <p style={{ fontSize: isMobile ? '0.8rem' : '1.125rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0 }}>{uiState.level}</p>
+                <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Time</p>
+                <p ref={timeDisplayRef} style={{ fontSize: isMobile ? '0.8rem' : '1.125rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                  00:00.000
+                </p>
+              </div>
+              <div>
+                <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Gravity</p>
+                <p style={{ fontSize: isMobile ? '0.8rem' : '1.125rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0 }}>{zeroGravity ? 'Zero-G' : `Lv ${uiState.level}`}</p>
               </div>
               <div>
                 <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines</p>

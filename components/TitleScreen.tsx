@@ -24,7 +24,9 @@ export const formatTime = (ms: number) => {
 export default function TitleScreen({ onPlay }: TitleScreenProps) {
   const [leaderboard, setLeaderboard] = useState<ScoreEntry[]>([]);
   const [allTimeBest, setAllTimeBest] = useState<ScoreEntry | null>(null);
-  const [viewMode, setViewMode] = useState<'standard' | 'sprint' | 'blitz'>('standard');
+  // Zen/sandbox mode doesn't score or compete, so it has no leaderboard tab —
+  // only the two competitive modes are selectable here.
+  const [viewMode, setViewMode] = useState<'sprint' | 'blitz'>('sprint');
   const {
     themeId: backgroundThemeId,
     themes: backgroundThemes,
@@ -239,13 +241,7 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
         
         {/* Mode Toggle */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
-          <button 
-            onClick={() => setViewMode('standard')}
-            style={{ flex: 1, backgroundColor: 'transparent', border: 'none', color: viewMode === 'standard' ? '#e5729f' : 'rgba(255,255,255,0.55)', cursor: 'pointer', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: viewMode === 'standard' ? 'bold' : 'normal', transition: 'color 0.2s' }}
-          >
-            Zen
-          </button>
-          <button 
+          <button
             onClick={() => setViewMode('sprint')}
             style={{ flex: 1, backgroundColor: 'transparent', border: 'none', color: viewMode === 'sprint' ? '#e5729f' : 'rgba(255,255,255,0.55)', cursor: 'pointer', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: viewMode === 'sprint' ? 'bold' : 'normal', transition: 'color 0.2s' }}
           >
