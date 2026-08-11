@@ -310,51 +310,67 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
       
       {/* Play Buttons */}
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button 
+        <button
           onClick={() => onPlay('standard')}
-          style={{ 
-            backgroundColor: 'rgba(50,15,28,0.65)', border: '1px solid #e5729f', color: 'white', 
-            padding: '10px 24px', fontSize: '0.875rem', cursor: 'pointer', borderRadius: '8px', 
-            textTransform: 'uppercase', letterSpacing: '0.2em', transition: 'all 0.2s', 
+          style={{
+            backgroundColor: 'rgba(10,10,14,0.55)', border: '1px solid #e5729f', color: 'white',
+            padding: '10px 24px', fontSize: '0.875rem', cursor: 'pointer', borderRadius: '8px',
+            textTransform: 'uppercase', letterSpacing: '0.2em', transition: 'all 0.2s',
             textShadow: '0 1px 3px rgba(0,0,0,0.7)',
-            boxShadow: '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)' 
+            boxShadow: '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)'
           }}
-          onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(229,114,159,0.5)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 25px rgba(229,114,159,0.6)'; }}
-          onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'rgba(50,15,28,0.65)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)'; }}
+          onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 25px rgba(229,114,159,0.6)'; }}
+          onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'rgba(10,10,14,0.55)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)'; }}
         >
           Zen Mode
         </button>
 
-        <button 
+        <button
           onClick={() => onPlay('sprint')}
-          style={{ 
-            backgroundColor: 'rgba(10,10,14,0.55)', border: '1px solid rgba(255,255,255,0.35)', color: 'white', 
-            padding: '10px 24px', fontSize: '0.875rem', cursor: 'pointer', borderRadius: '8px', 
+          style={{
+            backgroundColor: 'rgba(10,10,14,0.55)', border: '1px solid #e5729f', color: 'white',
+            padding: '10px 24px', fontSize: '0.875rem', cursor: 'pointer', borderRadius: '8px',
             textTransform: 'uppercase', letterSpacing: '0.2em', transition: 'all 0.2s',
             textShadow: '0 1px 3px rgba(0,0,0,0.7)',
-            boxShadow: '0 4px 18px rgba(0,0,0,0.35)'
+            boxShadow: '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)'
           }}
-          onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'; }}
-          onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'rgba(10,10,14,0.55)'; }}
+          onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(229,114,159,0.5)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 25px rgba(229,114,159,0.6)'; }}
+          onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'rgba(10,10,14,0.55)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)'; }}
         >
           40 Lines
         </button>
-        
-        <button 
+
+        <button
           onClick={() => onPlay('blitz')}
-          style={{ 
-            backgroundColor: 'rgba(10,10,14,0.55)', border: '1px solid rgba(255,255,255,0.35)', color: 'white', 
-            padding: '10px 24px', fontSize: '0.875rem', cursor: 'pointer', borderRadius: '8px', 
+          style={{
+            backgroundColor: 'rgba(10,10,14,0.55)', border: '1px solid #e5729f', color: 'white',
+            padding: '10px 24px', fontSize: '0.875rem', cursor: 'pointer', borderRadius: '8px',
             textTransform: 'uppercase', letterSpacing: '0.2em', transition: 'all 0.2s',
             textShadow: '0 1px 3px rgba(0,0,0,0.7)',
-            boxShadow: '0 4px 18px rgba(0,0,0,0.35)'
+            boxShadow: '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)'
           }}
-          onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'; }}
-          onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'rgba(10,10,14,0.55)'; }}
+          onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(229,114,159,0.5)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 25px rgba(229,114,159,0.6)'; }}
+          onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'rgba(10,10,14,0.55)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)'; }}
         >
           Blitz (3 min)
         </button>
       </div>
+
+      <button
+        onClick={() => onPlay('versus-lobby')}
+        style={{
+          marginTop: '1rem',
+          backgroundColor: 'rgba(10,10,14,0.55)', border: '1px solid #e5729f', color: 'white',
+          padding: '10px 24px', fontSize: '0.875rem', cursor: 'pointer', borderRadius: '8px',
+          textTransform: 'uppercase', letterSpacing: '0.2em', transition: 'all 0.2s',
+          textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+          boxShadow: '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)',
+        }}
+        onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 25px rgba(229,114,159,0.6)'; }}
+        onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'rgba(10,10,14,0.55)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)'; }}
+      >
+        Online Play
+      </button>
 
     </div>
     </div>

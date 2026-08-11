@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Tokens consumed by the Tetris multiplayer components (TetrisGame,
+     OnlineLobby, ControlsSettings — ported from the tetris-arena spinoff
+     project) via var(--tt-*)/color-mix(). Mapped to saiushi's own pink/dark
+     palette instead of tetris-arena's ice-cyan defaults, so the exact same
+     component code renders in this site's theme with no per-style edits. */
+  --tt-bg: #0a0708;
+  --tt-bg-elevated: #1e1418;
+  --tt-accent: #e5729f;
+  --tt-accent-secondary: #ffd76a;
+  --tt-text: #ffffff;
+}
+
 @layer utilities {
     /* --- Global Resets --- */
     * {

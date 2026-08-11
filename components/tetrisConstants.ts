@@ -11,6 +11,7 @@ export const COLORS = [
   '#f87171', // 5: Z - Red
   '#0ea5e9', // 6: J - Blue
   '#fb923c', // 7: L - Orange
+  '#6b7280', // 8: Garbage
 ];
 
 export const PIECES = [

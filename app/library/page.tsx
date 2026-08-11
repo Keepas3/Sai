@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import { client } from '@/sanity/lib/client';
 import TetrisModal from '@/components/TetrisModal';
 import TetrisGame from '@/components/TetrisGame';
+import { useSearchParam } from '@/components/useSearchParam';
 
 interface MediaItem {
   title: string;
@@ -21,7 +22,13 @@ export default function LibraryPage() {
   const [books, setBooks] = useState<MediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTetrisOpen, setIsTetrisOpen] = useState(false);
-  
+  // A shared "Copy Join Link" (see OnlineLobby.tsx) points back at this
+  // page with ?code=XXXXX — the easter egg has no route of its own to carry
+  // that param, so this page is what has to notice it and open the modal on
+  // the link-follower's behalf, instead of leaving them to find the hidden
+  // button themselves.
+  const joinCode = useSearchParam('code');
+
   const [expandedCardIndex, setExpandedCardIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -61,6 +68,17 @@ export default function LibraryPage() {
     };
     fetchLibraryData();
   }, []);
+
+  // Opens the modal on its own once a join code resolves — a link-follower
+  // shouldn't have to also find and click the hidden easter-egg button.
+  // joinCode starts undefined for one render (see useSearchParam) and is
+  // otherwise stable for the rest of the page's life, so this only ever
+  // fires the one time it resolves to a real code; closing the modal
+  // afterward (isTetrisOpen -> false) doesn't get overridden back open,
+  // since joinCode itself never changes again to re-trigger this effect.
+  useEffect(() => {
+    if (joinCode) setIsTetrisOpen(true);
+  }, [joinCode]);
 
   const handleTabChange = (tab: 'games' | 'books') => {
     setExpandedCardIndex(null);
@@ -287,9 +305,10 @@ export default function LibraryPage() {
       </div>
 
       {/* --- MOVED OUTSIDE OF content-wrapper SO IT CAN FULLY OVERLAY THE SCREEN --- */}
-      <TetrisModal 
-        isOpen={isTetrisOpen} 
-        onClose={() => setIsTetrisOpen(false)} 
+      <TetrisModal
+        isOpen={isTetrisOpen}
+        onClose={() => setIsTetrisOpen(false)}
+        initialCode={joinCode}
       />
     </>
   );
