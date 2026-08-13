@@ -19,8 +19,8 @@ export default function SpotifyStatus() {
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data = await res.json();
       
-      console.log('=== FRONTEND RECEIVED SPOTIFY DATA ===');
-      console.log('Full JSON Payload:', data);
+      // console.log('=== FRONTEND RECEIVED SPOTIFY DATA ===');
+      // console.log('Full JSON Payload:', data);
       
       setTrack(data);
     } catch (err) {
@@ -57,11 +57,11 @@ export default function SpotifyStatus() {
   const secondaryUrl = isNowPlaying || isOfflineHistoryStacked ? track?.recentSongUrl : track?.songUrl;
   const historyTrackId = secondaryUrl?.split('/track/')?.[1]?.split('?')?.[0] || '06DHZv4ahSwp30plm1kbgM';
 
-  console.log('=== FRONTEND IFRAME RENDERING STATE ===');
-  console.log('Status Mode Type:', track?.statusType);
-  console.log('isNowPlaying Condition:', isNowPlaying);
-  console.log('Parsed Top Layout Track ID:', currentTrackId);
-  console.log('Parsed Bottom Layout Track ID:', historyTrackId);
+  // console.log('=== FRONTEND IFRAME RENDERING STATE ===');
+  // console.log('Status Mode Type:', track?.statusType);
+  // console.log('isNowPlaying Condition:', isNowPlaying);
+  // console.log('Parsed Top Layout Track ID:', currentTrackId);
+  // console.log('Parsed Bottom Layout Track ID:', historyTrackId);
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-xl mx-auto">
@@ -111,4 +111,5 @@ export default function SpotifyStatus() {
 
     </div>
   );
+  
 }
