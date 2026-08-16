@@ -102,9 +102,12 @@ export default function Footer() {
         {/* --- Copyright --- */}
         <div className="w-full flex justify-center mt-2">
           <p className="text-[11px] font-mono tracking-widest text-[#b3a1a6] uppercase m-0">
-            © {currentYear} Sai. All rights reserved. &emsp;
-
-            <a href="/privacy-policy" target = "_blank" className="text-[11px] font-mono tracking-widest text-[#b3a1a6] uppercase ml-4 hover:text-[#e5729f] transition-colors duration-200">
+            © {currentYear}&nbsp;Sai. All rights reserved. &emsp; 
+            <a href="/terms-of-service" target = "_blank" className="text-[11px] font-mono tracking-widest text-[#b3a1a6] uppercase ml-4 ">
+              Terms of Service
+            </a>
+            &emsp;
+            <a href="/privacy-policy" target = "_blank" className="text-[11px] font-mono tracking-widest text-[#b3a1a6] uppercase ml-4">
               Privacy Policy
             </a>
           </p>

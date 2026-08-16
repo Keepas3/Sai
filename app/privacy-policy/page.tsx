@@ -212,7 +212,7 @@ export default function PrivacyPolicyPage() {
 
           <H2>Contact</H2>
           <P>
-            Questions, concerns, or a leaderboard removal request — reach out through any of the
+            Questions, concerns, or a leaderboard removal request - reach out through any of the
             contact methods linked elsewhere on this site.
           </P>
           <ExternalLink href="https://github.com/Keepas3/Sai">https://github.com/Keepas3/Sai</ExternalLink>
