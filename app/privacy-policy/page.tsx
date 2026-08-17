@@ -143,17 +143,17 @@ export default function PrivacyPolicyPage() {
             or gets sent to me:
           </P>
           <UL>
-            <LI>Tetris control bindings and handling settings (DAS/ARR/SDF, keybinds)</LI>
+            <LI>Raining Blocks control bindings and handling settings (DAS/ARR/SDF, keybinds)</LI>
             <LI>Site background theme choice</LI>
             <LI>Fortune slip draw history: when you last drew, your current streak, and the streak reward text</LI>
-            <LI>The nickname you choose for online Tetris play (so you don&apos;t have to retype it each time)</LI>
+            <LI>The nickname you choose for online Raining Blocks play (so you don&apos;t have to retype it each time)</LI>
           </UL>
           <P>
             You can clear any of this at any time by clearing your browser&apos;s site data for this
             domain nothing is lost on my end, because none of it is stored on my end.
           </P>
 
-          <H3>Tetris Leaderboard (Supabase)</H3>
+          <H3>Raining Blocks Leaderboard (Supabase)</H3>
           <P>
             If you finish a Sprint or Blitz run and it qualifies for the leaderboard, you&apos;re
             asked to type up to 3 initials. That entry includes your initials, score, level, game mode,

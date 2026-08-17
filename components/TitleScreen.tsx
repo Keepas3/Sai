@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../app/utils/supabaseClient'; // Adjust path if needed
 import { useBackgroundTheme } from './UseBackgroundTheme'; // Adjust path if needed
-
+import ControlsSettings from './ControlsSettings';
 interface TitleScreenProps {
   onPlay: (mode: string) => void;
 }
@@ -152,6 +152,9 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
         ⚙
       </button>
 
+
+      
+
       {isSettingsOpen && (
         <>
           {/* Click-away layer */}
@@ -229,11 +232,12 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
         </>
       )}
 
-      <h1 style={{ fontSize: '3rem', color: '#e5729f', textShadow: '0 2px 6px rgba(0,0,0,0.85), 0 0 20px rgba(229,114,159,0.8)', margin: '0 0 0.5rem 0', letterSpacing: '0.2em' }}>
-        TETRIS
+
+      <h1 style={{ fontSize: '3rem', color: '#e5729f', textShadow: '0 2px 6px rgba(0,0,0,0.85), 0 0 20px rgba(229,114,159,0.8)', margin: '0 0 0.5rem 0', letterSpacing: '0.05em' }}>
+        Raining Blocks
       </h1>
       <p style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.85)', marginBottom: '2rem', letterSpacing: '0.3em', fontSize: '0.875rem' }}>
-        ARCADE EDITION
+        
       </p>
 
       {/* Leaderboard Section */}
@@ -371,6 +375,8 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
       >
         Online Play
       </button>
+
+      
 
     </div>
     </div>

@@ -61,7 +61,7 @@ export default function LibraryPage() {
           setBooks(data.booksData?.booksList || []);
         }
       } catch (err) {
-        console.error("Failed fetching dynamic library logs:", err);
+        console.error("Sonlander");
       } finally {
         setIsLoading(false);
       }
@@ -129,16 +129,16 @@ export default function LibraryPage() {
               <button
                 type="button"
                 onClick={() => {
-                  console.log("Tetris triggered!"); // Quick console check to guarantee clicks are registering
+      
                   setIsTetrisOpen(true);
                 }}
                 /* Pushed slightly further left (-left-12), bumped z-index to 50, and added padding (p-2) for a bigger hitbox */
                 className="absolute -left-12 top-1/2 -translate-y-1/2 z-50 cursor-pointer group transition-all duration-500 outline-none border-none bg-transparent p-2"
-                title="Play Tetris"
+                title="Play Raining Blocks"
               >
                 <img
-                  src="/Tetrist.png"
-                  alt="Tetris Easter Egg"
+                  src="/tet0o.png"
+                  alt="T Easter Egg"
                   className="opacity-10 group-hover:opacity-60 transition-all duration-500 drop-shadow-md group-hover:drop-shadow-[0_0_8px_rgba(229,114,159,0.8)]"
                   style={{ 
                     width: '30px',

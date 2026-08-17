@@ -108,7 +108,7 @@ export default function TermsOfServicePage() {
             <LI>Use the site for anything illegal, or in a way that could damage, disable, or overburden it</LI>
             <LI>Attempt to access parts of the site or its backend (databases, admin tools) you&apos;re not meant to reach</LI>
             <LI>Scrape, bulk-download, or use automated tools against the site outside of normal, incidental use</LI>
-            <LI>Harass, impersonate, or abuse other players in the online Tetris lobby</LI>
+            <LI>Harass, impersonate, or abuse other players in the online Raining Blocks lobby</LI>
             <LI>Cheat, exploit bugs to gain an unfair advantage, or otherwise interfere with the leaderboard or multiplayer matches in bad faith</LI>
             <LI>Submit leaderboard initials or a multiplayer nickname that&apos;s abusive, impersonates someone else, or is otherwise inappropriate</LI>
           </UL>
@@ -148,7 +148,7 @@ export default function TermsOfServicePage() {
 
           <H2>No Warranty</H2>
           <P>
-            This site - including the Tetris game, online multiplayer, leaderboard, fortune
+            This site - including the Raining Blocks game, online multiplayer, leaderboard, fortune
             slip, and every other feature - is provided &quot;as is&quot; and &quot;as
             available,&quot; with no warranties of any kind, express or implied. That includes,
             without limitation, no warranty that the site will be uninterrupted, error-free,
