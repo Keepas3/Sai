@@ -11,6 +11,7 @@ import galleryItem from './galleryItem'
 import nowPlaying from './nowPlaying'
 import footerSettings from './footer'
 import backgroundTheme from './backgroundTheme'
+import { resourceType } from './resource'
 import fortuneSlip from './fortuneSlip'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
@@ -27,6 +28,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     nowPlaying,
     footerSettings,
     backgroundTheme,
+    resourceType,
     fortuneSlip,
   ],
 }

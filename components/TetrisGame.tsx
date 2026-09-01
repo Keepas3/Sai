@@ -2141,7 +2141,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>DAS (Delay)</span>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>DAS (Delay AutoShift)</span>
                       <span style={{ color: 'white', fontSize: '10px' }}>{tuning.das}ms</span>
                     </div>
                     <input type="range" min="50" max="300" step="10" value={tuning.das} onChange={(e) => setTuning(p => ({...p, das: Number(e.target.value)}))} style={{ width: '100%', accentColor: 'var(--tt-accent)', height: '4px' }} />

@@ -2,9 +2,33 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../app/utils/supabaseClient'; // Adjust path if needed
 import { useBackgroundTheme } from './UseBackgroundTheme'; // Adjust path if needed
+import { useResources, type Resource } from './useResources';
 import ControlsSettings from './ControlsSettings';
 interface TitleScreenProps {
   onPlay: (mode: string) => void;
+}
+
+// A plain external navigation — anchor tag gives free accessibility,
+// middle-click, and "open in new tab" context-menu support that a button +
+// manual window.open wouldn't. target="_blank" + rel="noopener noreferrer"
+// is required regardless of styling preference (prevents reverse-tabnabbing
+// via window.opener).
+function ResourceRow({ resource }: { resource: Resource }) {
+  return (
+    <a
+      href={resource.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ display: 'block', padding: '0.35rem 0.4rem', borderRadius: '4px', textDecoration: 'none', color: 'rgba(255,255,255,0.85)', fontSize: '0.75rem' }}
+      onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; }}
+      onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+    >
+      <div style={{ fontWeight: 'bold', letterSpacing: '0.02em' }}>{resource.title}</div>
+      {resource.description && (
+        <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>{resource.description}</div>
+      )}
+    </a>
+  );
 }
 
 interface ScoreEntry {
@@ -35,9 +59,29 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
   } = useBackgroundTheme();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  const { resources, isLoading: resourcesLoading } = useResources();
+  const [isResourcesOpen, setIsResourcesOpen] = useState(false);
+
+  const pinnedResources = resources.filter((r) => r.isPinned).slice(0, 3);
+  // Membership check against the already-sliced pinnedResources (not just
+  // !r.isPinned) is what makes a 4th+ pinned resource fall through here
+  // instead of vanishing — confirmed behavior, see useResources.ts.
+  const restResources = resources.filter((r) => !pinnedResources.some((p) => p._id === r._id));
+
   const handleSelectTheme = (id: string) => {
     setBackgroundThemeId(id);
     setIsSettingsOpen(false);
+  };
+
+  // Two dropdown panels open at once on a compact title screen is noisy —
+  // opening one closes the other.
+  const handleToggleSettings = () => {
+    setIsResourcesOpen(false);
+    setIsSettingsOpen((open) => !open);
+  };
+  const handleToggleResources = () => {
+    setIsSettingsOpen(false);
+    setIsResourcesOpen((open) => !open);
   };
 
   useEffect(() => {
@@ -124,7 +168,7 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
       >
       {/* Settings button */}
       <button
-        onClick={() => setIsSettingsOpen((open) => !open)}
+        onClick={handleToggleSettings}
         aria-label="Background settings"
         style={{
           position: 'absolute',
@@ -228,6 +272,99 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
                 Loading more…
               </p>
             )}
+          </div>
+        </>
+      )}
+
+      {/* Resources button */}
+      <button
+        onClick={handleToggleResources}
+        aria-label="Resources"
+        style={{
+          position: 'absolute',
+          top: '1rem',
+          left: '1rem',
+          width: '32px',
+          height: '32px',
+          background: 'transparent',
+          border: 'none',
+          color: isResourcesOpen ? '#e5729f' : 'rgba(255,255,255,0.75)',
+          cursor: 'pointer',
+          fontSize: '1.35rem',
+          lineHeight: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 20,
+          padding: 0,
+          textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+          transition: 'color 0.2s',
+        }}
+        onMouseOver={(e) => { e.currentTarget.style.color = '#e5729f'; }}
+        onMouseOut={(e) => { e.currentTarget.style.color = isResourcesOpen ? '#e5729f' : 'rgba(255,255,255,0.75)'; }}
+      >
+        ≡
+      </button>
+
+      {isResourcesOpen && (
+        <>
+          {/* Click-away layer */}
+          <div
+            onClick={() => setIsResourcesOpen(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 15 }}
+          />
+
+          <div
+            style={{
+              position: 'absolute',
+              top: '3.5rem',
+              left: '1rem',
+              backgroundColor: 'rgba(10,10,15,0.95)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '8px',
+              padding: '0.75rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.35rem',
+              minWidth: '220px',
+              maxWidth: '280px',
+              zIndex: 20,
+              boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+            }}
+          >
+            {resourcesLoading && (
+              <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.35)', margin: 0 }}>
+                Loading…
+              </p>
+            )}
+            {!resourcesLoading && resources.length === 0 && (
+              <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.35)', margin: 0 }}>
+                No resources yet
+              </p>
+            )}
+            {pinnedResources.length > 0 && (
+              <>
+                <p
+                  style={{
+                    fontSize: '0.65rem',
+                    letterSpacing: '0.15em',
+                    textTransform: 'uppercase',
+                    color: '#e5729f',
+                    margin: '0 0 0.25rem 0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                  }}
+                >
+                  📌 Pinned
+                </p>
+                {pinnedResources.map((r) => <ResourceRow key={r._id} resource={r} />)}
+                {restResources.length > 0 && (
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', margin: '0.35rem 0' }} />
+                )}
+              </>
+            )}
+            {restResources.map((r) => <ResourceRow key={r._id} resource={r} />)}
           </div>
         </>
       )}

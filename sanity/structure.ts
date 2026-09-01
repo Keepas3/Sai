@@ -86,6 +86,14 @@ export const structure: StructureResolver = (S) =>
             .title('Tetris Background Themes')
         ),
 
+      S.listItem()
+        .title('Tetris Resources')
+        .schemaType('resource')
+        .child(
+          S.documentTypeList('resource')
+            .title('Tetris Resources')
+        ),
+
       // 4. Active Projects
       S.listItem()
         .title('Projects')
