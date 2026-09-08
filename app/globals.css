@@ -15,6 +15,27 @@
   --tt-text: #ffffff;
 }
 
+/* Sitewide custom cursor — an osu!-style dot-with-ring, in GlowCursor's cyan
+   accent (the Tetris canvas gets its own pink version scoped inline in
+   TetrisGame.tsx instead, so the two don't fight over one color). Kept
+   outside @layer utilities and marked !important so it reliably overrides
+   the many one-off `cursor: pointer` rules already scattered through this
+   file for individual components below — those only lose to this if they
+   ALSO use !important with equal-or-higher specificity, which just one
+   (.glass-link-btn) currently does; that one keeping the native pointer is
+   an acceptable, minor exception rather than something worth an
+   override-specificity arms race over. The trailing `pointer` fallback
+   keeps things working even if a browser ever fails to load the inline SVG. */
+a,
+button:not(:disabled) {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="%2367E8F9" stroke-opacity="0.45" stroke-width="2"/><circle cx="10" cy="10" r="4.5" fill="%2367E8F9"/></svg>') 10 10, pointer !important;
+}
+
+button:disabled,
+input:disabled {
+  cursor: not-allowed !important;
+}
+
 @layer utilities {
     /* --- Global Resets --- */
     * {

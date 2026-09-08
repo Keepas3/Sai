@@ -1,0 +1,26 @@
+/* Fixed + viewport-sized (not the reactbits demo's relative/wrap-content
+   box) — this is a full-page ambient overlay, not a bounded showcase box.
+   Sizing to the viewport instead of scrolling page content is also what
+   keeps the WebGL canvas's pixel count bounded regardless of how long a
+   given page is (see the resize() comment in GlowCursor.tsx for why that
+   matters for performance). pointer-events:none on the whole layer — real
+   page content underneath must stay fully clickable/scrollable; the canvas
+   itself has its own pointer-events:none too as a second, redundant guard. */
+.glowCursor {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.glowCursorCanvas { 
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}

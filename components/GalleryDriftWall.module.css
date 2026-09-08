@@ -1,0 +1,174 @@
+/* Ported from a reactbits-style "DriftWall" example: continuously drifting
+   3D-tilted photo columns with an edge/depth mask and per-tile hover-lift.
+   Kept as a CSS Module (see GlowCursor.module.css for the same precedent) —
+   this Next.js version only allows plain CSS imports from the root layout
+   (see AGENTS.md), and this is a self-contained visual effect just like
+   GlowCursor, not shared page chrome that belongs in globals.css. */
+
+.wall {
+  position: relative;
+  width: 100%;
+  /* Bounded height (not 100% of an unbounded parent) so the column-copy
+     math in GalleryDriftWall.tsx can't blow up on a very tall viewport —
+     same "size to what's visible, not to unbounded content" lesson as
+     GlowCursor's viewport-sized canvas. */
+  height: 70vh;
+  max-height: 800px;
+  min-height: 420px;
+  overflow: hidden;
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+  -webkit-mask-image:
+    radial-gradient(ellipse 78% 82% at 50% 46%, #000 40%, transparent 100%),
+    linear-gradient(to top, #000 40%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    radial-gradient(ellipse 78% 82% at 50% 46%, #000 40%, transparent 100%),
+    linear-gradient(to top, #000 40%, transparent 100%);
+  mask-composite: intersect;
+}
+
+.plane {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: row;
+  transform-style: preserve-3d;
+  cursor: pointer;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.column {
+  position: relative;
+  width: calc(var(--dw-tile-w, 200px) + var(--dw-gap, 18px));
+  transform-style: preserve-3d;
+}
+
+.track {
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+  transform-style: preserve-3d;
+}
+
+.tile {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: calc(var(--dw-tile-h, 132px) + var(--dw-gap, 18px));
+  flex: 0 0 auto;
+  outline: none;
+  border: none;
+  background: none;
+  padding: 0;
+  transform-style: preserve-3d;
+  cursor: pointer;
+}
+
+.tileInner {
+  position: absolute;
+  inset: calc(var(--dw-gap, 18px) / 2);
+  display: block;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0b0b12;
+  opacity: 0.78;
+  transform: translateZ(0);
+  pointer-events: none;
+  transition:
+    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: saturate(0.92);
+  transition: filter 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.tileOverlay {
+  position: absolute;
+  inset: 0;
+  background: #0a0708;
+  opacity: 0.22;
+  pointer-events: none;
+  transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Small album-name pill in the tile's bottom-left corner — reuses the
+   site's existing `.tag` look (app/globals.css, pink pill) rather than
+   inventing a new pill style, just scoped into this module. */
+.albumTag {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 2;
+  font-size: 0.65rem;
+  padding: 0.2rem 0.6rem;
+  background: rgba(242, 110, 140, 0.25);
+  color: #ffffff;
+  border-radius: 999px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: calc(100% - 1rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+
+.tile.isActive .tileInner,
+.tile:focus-visible .tileInner {
+  opacity: 1;
+  transform: translateZ(64px);
+  box-shadow: 0 24px 60px -18px rgba(0, 0, 0, 0.7);
+}
+
+.tile.isActive img,
+.tile:focus-visible img {
+  filter: saturate(1.05);
+}
+
+.tile.isActive .tileOverlay,
+.tile:focus-visible .tileOverlay {
+  opacity: 0;
+}
+
+.tile.isActive .albumTag,
+.tile:focus-visible .albumTag {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.tile:focus-visible .tileInner {
+  box-shadow:
+    0 24px 60px -18px rgba(0, 0, 0, 0.7),
+    0 0 0 2px rgba(229, 114, 159, 0.9);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40vh;
+  min-height: 240px;
+  color: rgba(255, 255, 255, 0.3);
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plane,
+  .track {
+    will-change: auto;
+  }
+}

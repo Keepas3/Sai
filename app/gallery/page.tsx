@@ -3,12 +3,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import { client } from '@/sanity/lib/client';
+import GalleryDriftWall, { type FlatPhoto } from "@/components/GalleryDriftWall";
+import GalleryLightbox from "@/components/GalleryLightbox";
+import { FiLayers, FiGrid } from "react-icons/fi";
 
 interface GalleryItem {
   title: string;
   description?: string;
   url: string;
-  overlayVideoUrl?: string; 
+  overlayVideoUrl?: string;
   overlayStyle?: 'fullscreen' | 'container'; // ◄ Added to interface
 }
 
@@ -16,16 +19,29 @@ interface Topic {
   _id: string;
   title: string;
   description: string;
-  items: GalleryItem[]; 
+  items: GalleryItem[];
+}
+
+// Raw shape of the second, lighter GROQ projection used to build the "All
+// Photos" detailed view — deliberately omits overlayVideoUrl/overlayStyle
+// (irrelevant to that view) and includes _key so each image can be flattened
+// into a stable, addressable FlatPhoto below.
+interface AlbumForWall {
+  _id: string;
+  title: string;
+  images: { _key: string; title: string; description?: string; url: string }[];
 }
 
 export default function GalleryPage() {
   const OVERLAY_TRIGGER_CHANCE = 0.30;  
 
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [allPhotos, setAllPhotos] = useState<FlatPhoto[]>([]);
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+  const [viewMode, setViewMode] = useState<'albums' | 'detailed'>('albums');
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [albumIndex, setAlbumIndex] = useState(0);
 
@@ -57,20 +73,54 @@ export default function GalleryPage() {
     const fetchGalleryData = async () => {
       try {
         const data = await client.fetch(`
-          *[_type == "galleryTopic"] | order(_createdAt asc) {
-            _id,
-            title,
-            description,
-            "items": coalesce(images[] {
+          {
+            "topics": *[_type == "galleryTopic"] | order(_createdAt asc) {
+              _id,
               title,
-              description, 
-              "url": image.asset->url,
-              "overlayVideoUrl": overlayVideo.asset->url,
-              "overlayStyle": overlayStyle // ◄ Added to fetch query
-            }, [])
+              description,
+              "items": coalesce(images[] {
+                title,
+                description,
+                "url": image.asset->url,
+                "overlayVideoUrl": overlayVideo.asset->url,
+                "overlayStyle": overlayStyle // ◄ Added to fetch query
+              }, [])
+            },
+            "albumsForWall": *[_type == "galleryTopic"] | order(_createdAt asc) {
+              _id,
+              title,
+              "images": coalesce(images[] {
+                _key,
+                title,
+                description,
+                "url": image.asset->url
+              }, [])
+            }
           }
         `);
-        setTopics(data || []);
+        setTopics(data?.topics || []);
+
+        // Flatten every album's images into one addressable list for the
+        // "All Photos" detailed view — index is assigned here (not in GROQ)
+        // since the drift wall/lightbox need a stable position within the
+        // flattened list, not within any one album, for prev/next nav.
+        const albumsForWall: AlbumForWall[] = data?.albumsForWall || [];
+        let runningIndex = 0;
+        const flattened: FlatPhoto[] = [];
+        for (const album of albumsForWall) {
+          for (const image of album.images) {
+            flattened.push({
+              key: `${album._id}-${image._key}`,
+              index: runningIndex++,
+              url: image.url,
+              title: image.title,
+              description: image.description,
+              albumId: album._id,
+              albumTitle: album.title,
+            });
+          }
+        }
+        setAllPhotos(flattened);
       } catch (error) {
         console.error("Failed to fetch gallery data:", error);
       } finally {
@@ -152,11 +202,16 @@ export default function GalleryPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!activeTopicId) {
+      // GalleryLightbox installs its own Escape/ArrowLeft/ArrowRight
+      // listener while open — bail out here so the two don't double-fire
+      // on the same keypress.
+      if (lightboxIndex !== null) return;
+
+      if (!activeTopicId && viewMode === 'albums') {
         if (e.key === "ArrowLeft") prevAlbum();
         if (e.key === "ArrowRight") nextAlbum();
         if (e.key === "Enter" && topics.length > 0) openTopic(topics[albumIndex]._id);
-      } else if (filteredSlides.length > 0) {
+      } else if (activeTopicId && filteredSlides.length > 0) {
         if (e.key === "ArrowLeft") prevSlide();
         if (e.key === "ArrowRight") nextSlide();
         if (e.key === "Escape") closeTopic();
@@ -164,7 +219,7 @@ export default function GalleryPage() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeTopicId, filteredSlides.length, albumIndex, topics]);
+  }, [activeTopicId, filteredSlides.length, albumIndex, topics, viewMode, lightboxIndex]);
 
   if (isLoading) {
     return (
@@ -187,12 +242,67 @@ export default function GalleryPage() {
 
         {!activeTopicId ? (
           <div className="albums-view animate-fade-in mt-2 flex flex-col items-center select-none w-full" style={{ overflow: 'visible' }}>
+            <div
+              className="flex mx-auto mb-6"
+              style={{
+                maxWidth: 'fit-content',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+              }}
+            >
+              <button
+                onClick={() => setViewMode('albums')}
+                aria-label="Albums view"
+                aria-pressed={viewMode === 'albums'}
+                title="Albums"
+                style={{
+                  padding: '0.4rem 0.65rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: viewMode === 'albums' ? 'rgba(229, 114, 159, 0.15)' : 'transparent',
+                  color: viewMode === 'albums' ? '#e5729f' : 'rgba(255, 255, 255, 0.3)',
+                  border: 'none',
+                  borderRadius: '7px',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s ease, color 0.2s ease',
+                }}
+              >
+                <FiLayers size={14} />
+              </button>
+              <button
+                onClick={() => setViewMode('detailed')}
+                aria-label="All photos view"
+                aria-pressed={viewMode === 'detailed'}
+                title="All Photos"
+                style={{
+                  padding: '0.4rem 0.65rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: viewMode === 'detailed' ? 'rgba(229, 114, 159, 0.15)' : 'transparent',
+                  color: viewMode === 'detailed' ? '#e5729f' : 'rgba(255, 255, 255, 0.3)',
+                  border: 'none',
+                  borderRadius: '7px',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s ease, color 0.2s ease',
+                }}
+              >
+                <FiGrid size={14} />
+              </button>
+            </div>
+
+            {viewMode === 'detailed' ? (
+              <div className="w-full" style={{ maxWidth: '1200px', marginTop: '1rem' }}>
+                <GalleryDriftWall items={allPhotos} onSelect={setLightboxIndex} isPaused={lightboxIndex !== null} />
+              </div>
+            ) : (
+              <>
             <p className="text-center text-white/50 text-sm font-mono tracking-widest uppercase mb-10">Select an album to explore</p>
 
             {topics.length === 0 ? (
               <p className="text-center text-white/30 italic">No albums created yet.</p>
             ) : (
-              <div style={{ 
+              <div style={{
                 position: 'relative', 
                 width: '100%', 
                 maxWidth: '1200px', 
@@ -336,6 +446,8 @@ export default function GalleryPage() {
                 })}
               </div>
             )}
+              </>
+            )}
           </div>
 
         ) : (
@@ -460,6 +572,13 @@ export default function GalleryPage() {
           </div>
         )}
       </main>
+
+      <GalleryLightbox
+        photos={allPhotos}
+        activeIndex={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+        onNavigate={setLightboxIndex}
+      />
 
       {/* =========================================
           STYLE 2: THE GLOBAL FULL-SCREEN OVERLAY

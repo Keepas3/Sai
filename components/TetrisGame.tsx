@@ -118,6 +118,15 @@ interface ScoreEntry {
   mode: string;
 }
 
+// Same osu!-style dot-with-ring cursor as the sitewide one in globals.css
+// (a filled circle + a soft outer ring), just in the site's pink accent
+// instead of GlowCursor's cyan — scoped to just this canvas via inline
+// style rather than a CSS rule, so it doesn't leak onto the rest of the
+// Tetris UI's ordinary buttons (title screen, lobby, settings), which keep
+// the sitewide cyan cursor like everything else.
+const GAME_CURSOR =
+  'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="%23e5729f" stroke-opacity="0.45" stroke-width="2"/><circle cx="10" cy="10" r="4.5" fill="%23e5729f"/></svg>\') 10 10, pointer';
+
 const MAX_LEADERBOARD = 8;
 const SPRINT_GOAL = 40;
 const BLITZ_TIME_LIMIT = 3 * 60 * 1000; // 3 minutes in milliseconds
@@ -922,7 +931,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
         // math as playerReset() itself, computed here since it hasn't run yet.
         {
           const nextMatrix = PIECES[nextPiecesRef.current[0]];
-          const nextX = Math.floor(COLS / 2) - Math.floor(nextMatrix[0].length / 2);
+          const nextX = Math.floor((COLS - nextMatrix[0].length) / 2);
           onBoardUpdate?.({ board: board.current, pieceMatrix: nextMatrix, pieceX: nextX, pieceY: 0, livesRemaining: livesRemainingRef.current, score: scoreRef.current, level: levelRef.current, lines: linesRef.current, next: nextPiecesRef.current.slice(0, 5), hold: holdPieceRef.current });
         }
         playerReset();
@@ -981,7 +990,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     
     player.current.matrix = PIECES[player.current.type];
     player.current.pos.y = 0;
-    player.current.pos.x = Math.floor(COLS / 2) - Math.floor(player.current.matrix[0].length / 2);
+    player.current.pos.x = Math.floor((COLS - player.current.matrix[0].length) / 2);
     player.current.rotState = 0; 
     
     lowestYRef.current = player.current.pos.y;
@@ -1011,7 +1020,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     player.current.type = nextPiecesRef.current.shift()!;
     player.current.matrix = PIECES[player.current.type];
     player.current.pos.y = 0;
-    player.current.pos.x = Math.floor(COLS / 2) - Math.floor(player.current.matrix[0].length / 2);
+    player.current.pos.x = Math.floor((COLS - player.current.matrix[0].length) / 2);
     player.current.rotState = 0;
     
     lowestYRef.current = player.current.pos.y;
@@ -1140,7 +1149,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       // reorder around playerReset()'s own game-over collision check. Same
       // spawn math as playerReset() itself, computed here since it hasn't run yet.
       const nextMatrix = PIECES[nextPiecesRef.current[0]];
-      const nextX = Math.floor(COLS / 2) - Math.floor(nextMatrix[0].length / 2);
+      const nextX = Math.floor((COLS - nextMatrix[0].length) / 2);
       // player.current.matrix/pos still describe the piece that was JUST
       // locked (merge() above only reads them, playerReset() below hasn't
       // run yet) — exactly the delta co-op's merge-only sync needs. Sent
@@ -1278,7 +1287,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       holdPieceRef.current = player.current.type; playerReset();
     } else {
       const temp = player.current.type; player.current.type = holdPieceRef.current; player.current.matrix = PIECES[player.current.type];
-      holdPieceRef.current = temp; player.current.pos.y = 0; player.current.pos.x = Math.floor(COLS / 2) - Math.floor(player.current.matrix[0].length / 2);
+      holdPieceRef.current = temp; player.current.pos.y = 0; player.current.pos.x = Math.floor((COLS - player.current.matrix[0].length) / 2);
       player.current.rotState = 0;
 
       lowestYRef.current = player.current.pos.y;
@@ -1309,7 +1318,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     if (gameStateRef.current !== 'PLAYING') return;
 
     const matrix = PIECES[type];
-    const pos = { x: Math.floor(COLS / 2) - Math.floor(matrix[0].length / 2), y: 0 };
+    const pos = { x: Math.floor((COLS - matrix[0].length) / 2), y: 0 };
     if (collide(board.current, { matrix, pos })) return; // no room to force-spawn right now
 
     player.current.type = type;
@@ -1980,7 +1989,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
           </div>
         )}
       <div style={{ position: 'relative', border: '2px solid rgba(255,255,255,0.1)', backgroundColor: 'black', borderRadius: '0.5rem', boxShadow: '0 0 30px rgba(0,0,0,0.5)', overflow: 'hidden', flexShrink: 0 }}>
-        <canvas ref={canvasRef} width={300} height={600} style={isMobile ? { display: 'block', width: 'min(190px, calc(100vw - 224px))', height: 'auto' } : { display: 'block' }} />
+        <canvas ref={canvasRef} width={300} height={600} style={isMobile ? { display: 'block', width: 'min(190px, calc(100vw - 224px))', height: 'auto', cursor: GAME_CURSOR } : { display: 'block', cursor: GAME_CURSOR }} />
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', backgroundImage: 'linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px)', backgroundSize: '100% 4px' }} />
 
         {/* COUNTDOWN OVERLAY */}
