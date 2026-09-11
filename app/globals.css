@@ -1184,7 +1184,12 @@ a.glass-link-btn:hover .glass-link-icon {
     .nav-links {
         display: flex;
         list-style: none;
-        gap: 1.5rem !important; /* Increased from 1rem for cleaner text separation and tapping room */
+        /* Tightened from 1.5rem — at that spacing, "Gallery" (the last link)
+           landed entirely past the visible edge on common phone widths, so
+           nobody discovered there was a Gallery section to scroll to. This
+           still leaves comfortable tap spacing while letting at least the
+           start of every link peek into view before any scrolling. */
+        gap: 0.9rem !important;
         font-size: 0.95rem !important; /* Slightly optimized text scaling */
         
         /* --- ENABLE HORIZONTAL TOUCH SCROLLING --- */

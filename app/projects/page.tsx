@@ -23,7 +23,7 @@ export default async function WorkPage() {
         "imageUrl": image.asset->url
       }
     }
-  `, {}, { cache: 'no-store' });
+  `, {}, { next: { revalidate: 60 } });
 
   const sectionTitle = data?.pageTitle || "Work & Projects";
   const projects: Project[] = data?.projectList || [];

@@ -1,11 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAudio } from './AudioContext';
 import { motion } from 'framer-motion';
 
 export default function NowPlayingWidget() {
   const { isPlaying, togglePlay, track, volume, setVolume } = useAudio();
+  const [isMinimized, setIsMinimized] = useState(false);
 
   if (!track) return null;
 
@@ -32,6 +33,38 @@ export default function NowPlayingWidget() {
       }}
       whileTap={{ cursor: 'grabbing' }}
     >
+      {/* Peeking out of the corner rather than sitting in the row — same
+          "stop the drag gesture from eating this click" trick the volume
+          slider already uses below (onPointerDown stopPropagation), since
+          the parent motion.div's `drag` prop otherwise intercepts pointer
+          events meant for a child control. */}
+      <button
+        onClick={() => setIsMinimized((prev) => !prev)}
+        onPointerDown={(e) => e.stopPropagation()}
+        aria-label={isMinimized ? 'Expand player' : 'Minimize player'}
+        title={isMinimized ? 'Expand' : 'Minimize'}
+        style={{
+          position: 'absolute',
+          top: '-6px',
+          right: '-6px',
+          width: '18px',
+          height: '18px',
+          borderRadius: '50%',
+          backgroundColor: '#e5729f',
+          color: 'white',
+          border: '2px solid rgba(10, 7, 8, 0.9)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          fontSize: '10px',
+          lineHeight: 1,
+          padding: 0,
+        }}
+      >
+        {isMinimized ? '+' : '−'}
+      </button>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
         <button
           onClick={togglePlay}
@@ -41,7 +74,7 @@ export default function NowPlayingWidget() {
             border: 'none',
             borderRadius: '50%',
             width: '26px', // ~5% smaller button
-            height: '26px', 
+            height: '26px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -52,27 +85,31 @@ export default function NowPlayingWidget() {
           {isPlaying ? '❚❚' : '▶'}
         </button>
 
-        {/* Constrain width to 160px so the ellipsis kicks in automatically */}
-        <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '160px' }}>
-          <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Now Playing
-          </span>
-          <span style={{ 
-            fontSize: '11px', 
-            color: 'white', 
-            fontWeight: 'bold', 
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',        // Hide what bleeds past 160px
-            textOverflow: 'ellipsis',  // Add the "..."
-            display: 'block'           // Required for textOverflow to work on a span
-          }}>
-            {track.title} {track.artist ? `— ${track.artist}` : ''}
-          </span>
-        </div>
+        {!isMinimized && (
+          /* Constrain width to 160px so the ellipsis kicks in automatically */
+          <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '160px' }}>
+            <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Now Playing
+            </span>
+            <span style={{
+              fontSize: '11px',
+              color: 'white',
+              fontWeight: 'bold',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',        // Hide what bleeds past 160px
+              textOverflow: 'ellipsis',  // Add the "..."
+              display: 'block'           // Required for textOverflow to work on a span
+            }}>
+              {track.title} {track.artist ? `— ${track.artist}` : ''}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Visual Divider */}
-      <div style={{ width: '1px', height: '20px', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+      {!isMinimized && (
+        /* Visual Divider */
+        <div style={{ width: '1px', height: '20px', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+      )}
 
       {/* Volume Mixer */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>

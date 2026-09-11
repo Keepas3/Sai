@@ -32,17 +32,30 @@ interface GalleryDriftWallProps {
 }
 
 // Page-specific tuning, not exposed as props — this is one view of the
-// Gallery page, not a generic reusable library component.
+// Gallery page, not a generic reusable library component. Desktop sizing;
+// see the isMobile-driven overrides inside the component below — at the
+// desktop tile size + column count, a phone-width viewport could only ever
+// fit ~1.5 columns on screen (the plane's flex width times its scale
+// transform vastly exceeds a phone's viewport), so mobile needs its own
+// smaller tile/gap/column numbers rather than just shrinking everything
+// uniformly the way the album coverflow's single scale factor could.
 const COLUMNS = 5;
 const TILE_WIDTH = 200;
 const TILE_HEIGHT = 132;
 const GAP = 18;
+const PLANE_SCALE = 1.28;
 const TILT = 16;
 const TURN = -14;
 const DEPTH = 60;
 const SPEED = 42;
 const VARIANCE = 0.45;
 const PARALLAX = 0.6;
+
+const MOBILE_COLUMNS = 3;
+const MOBILE_TILE_WIDTH = 104;
+const MOBILE_TILE_HEIGHT = 72;
+const MOBILE_GAP = 8;
+const MOBILE_PLANE_SCALE = 1.08;
 
 // Loose ceilings, not a tight budget — the infinite-scroll illusion needs
 // enough duplicated tiles to cover ~1.6x the visible height per column, and
@@ -86,6 +99,23 @@ export default function GalleryDriftWall({ items, onSelect, isPaused = false }: 
   const activeIdRef = useRef<string | null>(null);
   const [reduced, setReduced] = useState(false);
 
+  // Same breakpoint/pattern as the album coverflow in app/gallery/page.tsx
+  // and TetrisGame.tsx's own isMobile check.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 700px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  const columns = isMobile ? MOBILE_COLUMNS : COLUMNS;
+  const tileWidth = isMobile ? MOBILE_TILE_WIDTH : TILE_WIDTH;
+  const tileHeight = isMobile ? MOBILE_TILE_HEIGHT : TILE_HEIGHT;
+  const gap = isMobile ? MOBILE_GAP : GAP;
+  const planeScale = isMobile ? MOBILE_PLANE_SCALE : PLANE_SCALE;
+
   useEffect(() => {
     pausedRef.current = isPaused || document.hidden;
   }, [isPaused]);
@@ -110,20 +140,20 @@ export default function GalleryDriftWall({ items, onSelect, isPaused = false }: 
   }, [isPaused]);
 
   const columnItems = useMemo(() => {
-    const cols: FlatPhoto[][] = Array.from({ length: COLUMNS }, () => []);
-    items.forEach((item, i) => cols[i % COLUMNS].push(item));
+    const cols: FlatPhoto[][] = Array.from({ length: columns }, () => []);
+    items.forEach((item, i) => cols[i % columns].push(item));
     return cols.map((col) => (col.length ? col : items.slice(0, 1)));
-  }, [items]);
+  }, [items, columns]);
 
   const columnMeta = useMemo(() => {
-    const unit = TILE_HEIGHT + GAP;
+    const unit = tileHeight + gap;
     const cappedHeight = Math.min(containerHeight, MAX_CONTAINER_HEIGHT);
     return columnItems.map((col) => {
       const copyHeight = Math.max(unit, col.length * unit);
       const copies = Math.min(MAX_COPIES, Math.max(2, Math.ceil((cappedHeight * 1.6) / copyHeight) + 1));
       return { copyHeight, copies };
     });
-  }, [columnItems, containerHeight]);
+  }, [columnItems, containerHeight, tileHeight, gap]);
 
   // Defensive: bound how large a reported container height can push the
   // copy math, mirroring GlowCursor's "size to what's visible" lesson.
@@ -149,12 +179,15 @@ export default function GalleryDriftWall({ items, onSelect, isPaused = false }: 
     velocitiesRef.current = columnItems.map(() => 0);
   }, [columnMeta, columnItems]);
 
-  const applyPlaneTransform = useCallback((px: number, py: number) => {
-    const plane = planeRef.current;
-    if (!plane) return;
-    plane.style.transform =
-      `translate(-50%, -50%) scale(1.28) ` + `rotateX(${TILT + py}deg) rotateY(${TURN + px}deg) ` + `translateZ(${-DEPTH}px)`;
-  }, []);
+  const applyPlaneTransform = useCallback(
+    (px: number, py: number) => {
+      const plane = planeRef.current;
+      if (!plane) return;
+      plane.style.transform =
+        `translate(-50%, -50%) scale(${planeScale}) ` + `rotateX(${TILT + py}deg) rotateY(${TURN + px}deg) ` + `translateZ(${-DEPTH}px)`;
+    },
+    [planeScale]
+  );
 
   useEffect(() => {
     if (items.length === 0) return;
@@ -249,11 +282,11 @@ export default function GalleryDriftWall({ items, onSelect, isPaused = false }: 
   const cssVars = useMemo(
     () =>
       ({
-        '--dw-tile-w': `${TILE_WIDTH}px`,
-        '--dw-tile-h': `${TILE_HEIGHT}px`,
-        '--dw-gap': `${GAP}px`,
+        '--dw-tile-w': `${tileWidth}px`,
+        '--dw-tile-h': `${tileHeight}px`,
+        '--dw-gap': `${gap}px`,
       }) as React.CSSProperties,
-    []
+    [tileWidth, tileHeight, gap]
   );
 
   if (items.length === 0) {

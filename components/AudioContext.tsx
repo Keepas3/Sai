@@ -1,13 +1,14 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { client } from '@/sanity/lib/client';
 
 export interface TrackData {
   title: string;
   artist?: string;
   audioUrl: string;
-  loopStart: number; 
-  loopEnd: number;   
+  loopStart: number;
+  loopEnd: number;
 }
 
 interface AudioContextType {
@@ -20,12 +21,23 @@ interface AudioContextType {
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
 
+// Fetched client-side (this is the public, read-only CDN client — safe in
+// the browser) instead of blocking the root layout's server render on it —
+// see the comment in app/layout.tsx. NowPlayingWidget already renders
+// nothing until `track` resolves, so a null-then-populated value here costs
+// nothing visible; it just avoids costing every page's initial paint.
+const NOW_PLAYING_QUERY = `*[_type == "nowPlaying"][0]{
+  title,
+  artist,
+  "audioUrl": audioFile.asset->url,
+  loopStart,
+  loopEnd
+}`;
+
 export function AudioProvider({
   children,
-  track,
 }: {
   children: React.ReactNode;
-  track: TrackData | null;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeFrameRef = useRef<number | null>(null);
@@ -34,6 +46,19 @@ export function AudioProvider({
   const isFadingRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5); // Default to 50% volume
+  const [track, setTrack] = useState<TrackData | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    client.fetch(NOW_PLAYING_QUERY).then((data: TrackData | null) => {
+      if (!cancelled) setTrack(data);
+    }).catch((error) => {
+      console.error('Failed to fetch now-playing track:', error);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const cancelCurrentFade = () => {
     fadeTokenRef.current += 1;

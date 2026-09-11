@@ -118,7 +118,7 @@ async function getFullPost(slug: string) {
       "categories": categories[0..2]-> { title }
     }
   `;
-  return await client.fetch(query, { slug }, { cache: 'no-store' });
+  return await client.fetch(query, { slug }, { next: { revalidate: 60 } });
 }
 
 export default async function BlogPostPage({ params }: BlogPostPageProps) {

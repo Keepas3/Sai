@@ -4,8 +4,15 @@ import FortuneSlip from "@/components/FortuneSlip";
 import { client } from '@/sanity/lib/client';
 import Link from 'next/link';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// Was force-dynamic + revalidate: 0 (see the fetch's cache option below) —
+// that forced a live, uncached round-trip to Sanity for this whole
+// combined query on every single request before any HTML could be sent,
+// which is the main reason FCP on this page was slow. Sanity content here
+// (profile, projects, currently-playing games/books, blog categories)
+// doesn't need to be instantaneous — a short revalidation window lets
+// Vercel serve a cached response immediately for most visits and only hit
+// Sanity again in the background once it's stale.
+export const revalidate = 60;
 
 interface ProfileData {
   name: string;
@@ -90,7 +97,7 @@ export default async function Home() {
       description,
       "slug": slug.current
     }
-  }`, {}, { cache: 'no-store' });
+  }`, {}, { next: { revalidate: 60 } });
 
   const profile: ProfileData | null = data.profile;
   const fortuneSlip = data.fortuneSlip;

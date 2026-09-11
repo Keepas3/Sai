@@ -45,6 +45,24 @@ export default function GalleryPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [albumIndex, setAlbumIndex] = useState(0);
 
+  // The album coverflow below is built from fixed-px offsets (630px-wide
+  // cards, 340/60px translateX steps) tuned for desktop — on a phone
+  // viewport that made the front card wider than the screen itself (getting
+  // cropped on both edges) while the peeking side cards landed entirely
+  // off-screen. Scaling every one of those px values down together via a
+  // single `coverflowScale` factor keeps the exact same layout formula (and
+  // desktop is unaffected, since the scale is 1 there) while shrinking the
+  // whole carousel to fit a narrow viewport instead of redesigning it.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 700px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  const coverflowScale = isMobile ? 0.44 : 1;
+
   const [overlayState, setOverlayState] = useState<'hidden' | 'visible' | 'fading'>('hidden');
   const [activeOverlayVideo, setActiveOverlayVideo] = useState<string | null>(null);
   
@@ -297,31 +315,31 @@ export default function GalleryPage() {
               </div>
             ) : (
               <>
-            <p className="text-center text-white/50 text-sm font-mono tracking-widest uppercase mb-10">Select an album to explore</p>
+            <p className="text-center text-white/50 text-sm font-mono tracking-widest mb-10">Select an Album to Explore</p>
 
             {topics.length === 0 ? (
               <p className="text-center text-white/30 italic">No albums created yet.</p>
             ) : (
               <div style={{
-                position: 'relative', 
-                width: '100%', 
-                maxWidth: '1200px', 
-                height: '600px', 
-                display: 'flex', 
-                alignItems: 'center', 
+                position: 'relative',
+                width: '100%',
+                maxWidth: '1200px',
+                height: isMobile ? '360px' : '600px',
+                display: 'flex',
+                alignItems: 'center',
                 justifyContent: 'center',
                 marginTop: '1rem',
-                overflow: 'visible' 
+                overflow: 'visible'
               }}>
                 
-                <button 
+                <button
                   onClick={prevAlbum}
                   style={{
                     position: 'absolute',
-                    left: '10px',
+                    left: isMobile ? '2px' : '10px',
                     zIndex: 9999,
-                    width: '64px',
-                    height: '64px',
+                    width: isMobile ? '40px' : '64px',
+                    height: isMobile ? '40px' : '64px',
                     borderRadius: '50%',
                     backgroundColor: 'rgba(0, 0, 0, 0.8)',
                     border: '2px solid rgba(255, 255, 255, 0.1)',
@@ -335,19 +353,19 @@ export default function GalleryPage() {
                   onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#e5729f'}
                   onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.8)'}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" style={{ width: '32px', height: '32px', transform: 'translateX(-2px)' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" style={{ width: isMobile ? '20px' : '32px', height: isMobile ? '20px' : '32px', transform: 'translateX(-2px)' }}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                   </svg>
                 </button>
 
-                <button 
+                <button
                   onClick={nextAlbum}
                   style={{
                     position: 'absolute',
-                    right: '10px',
+                    right: isMobile ? '2px' : '10px',
                     zIndex: 9999,
-                    width: '64px',
-                    height: '64px',
+                    width: isMobile ? '40px' : '64px',
+                    height: isMobile ? '40px' : '64px',
                     borderRadius: '50%',
                     backgroundColor: 'rgba(0, 0, 0, 0.8)',
                     border: '2px solid rgba(255, 255, 255, 0.1)',
@@ -361,7 +379,7 @@ export default function GalleryPage() {
                   onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#e5729f'}
                   onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.8)'}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" style={{ width: '32px', height: '32px', transform: 'translateX(2px)' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" style={{ width: isMobile ? '20px' : '32px', height: isMobile ? '20px' : '32px', transform: 'translateX(2px)' }}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                   </svg>
                 </button>
@@ -372,15 +390,15 @@ export default function GalleryPage() {
                   const isFront = absOffset === 0;
                   
                   const sign = Math.sign(offset);
-                  const translateX = sign * 340 + (sign * absOffset * 60); 
-                  const translateZ = -absOffset * 300; 
-                  const rotateY = sign * -25; 
+                  const translateX = (sign * 340 + (sign * absOffset * 60)) * coverflowScale;
+                  const translateZ = -absOffset * 300 * coverflowScale;
+                  const rotateY = sign * -25;
 
                   const coverUrl = getTopicCover(topic);
 
                   return (
-                    <div 
-                      key={topic._id} 
+                    <div
+                      key={topic._id}
                       onClick={() => isFront ? openTopic(topic._id) : setAlbumIndex(i)}
                       style={{
                         position: 'absolute',
@@ -389,7 +407,7 @@ export default function GalleryPage() {
                         flexDirection: 'column',
                         alignItems: 'center',
                         cursor: 'pointer',
-                        width: '630px', 
+                        width: isMobile ? '278px' : '630px',
                         transition: 'all 0.7s cubic-bezier(0.25, 1, 0.5, 1)',
                         transform: `perspective(1200px) translateX(${translateX}px) translateZ(${translateZ}px) rotateY(${rotateY}deg)`,
                         zIndex: 50 - absOffset,
@@ -428,15 +446,15 @@ export default function GalleryPage() {
                         textAlign: 'center',
                         width: '100%',
                         padding: '0 8px',
-                        marginTop: '24px',
+                        marginTop: isMobile ? '14px' : '24px',
                         opacity: isFront ? 1 : 0,
                         transition: 'opacity 0.5s ease-out'
                       }}>
-                        <h3 style={{ color: '#e5729f', fontWeight: 'bold', letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: '24px', margin: 0, textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
+                        <h3 style={{ color: '#e5729f', fontWeight: 'bold', letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: isMobile ? '15px' : '24px', margin: 0, textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
                           {topic.title}
                         </h3>
                         {topic.description && (
-                          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '14px', fontFamily: 'monospace', marginTop: '12px', lineHeight: 1.6 }}>
+                          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: isMobile ? '11px' : '14px', fontFamily: 'monospace', marginTop: isMobile ? '6px' : '12px', lineHeight: 1.5 }}>
                             {topic.description}
                           </p>
                         )}

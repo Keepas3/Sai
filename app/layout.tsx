@@ -2,12 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Comfortaa } from "next/font/google";
 
-import { client } from "@/sanity/lib/client"; 
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import SakuraCanvas from "@/components/sai";
 import Footer from '@/components/Footer'
-import { AudioProvider, TrackData } from '@/components/AudioContext';
+import { AudioProvider } from '@/components/AudioContext';
 import NowPlayingWidget from '@/components/NowPlayingWidget';
 import GlowCursor from '@/components/GlowCursor';
 
@@ -21,38 +20,24 @@ export const metadata: Metadata = {
   description: "Read Umineko (also Mudkip is the GOAT)",
 };
 
-// 1. Add the Sanity Query
-const NOW_PLAYING_QUERY = `*[_type == "nowPlaying"][0]{
-  title,
-  artist,
-  "audioUrl": audioFile.asset->url,
-  loopStart,
-  loopEnd
-}`;
-
-const FORTUNE_SLIP_QUERY = `*[_type == "fortuneSlip"][0]{
-  title,
-  preview,
-  note
-}`;
-
-// 2. Make the layout async so we can fetch data securely on the server
-export default async function RootLayout({
+// This used to be an async server component that `await`ed two Sanity
+// fetches (the now-playing track, plus a `fortuneSlip` query whose result
+// was never even used anywhere below) before sending ANY html for every
+// single page on the site — directly inflating FCP/TTFB sitewide. The
+// now-playing track is fetched client-side instead now (see
+// AudioContext.tsx's own useEffect) since NowPlayingWidget already renders
+// nothing until `track` resolves, so there's nothing here worth blocking
+// the initial paint for. The layout no longer needs to be async at all.
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  
-  // 3. Fetch the track data from Sanity
-  const track: TrackData | null = await client.fetch(NOW_PLAYING_QUERY);
-  const fortuneSlip = await client.fetch(FORTUNE_SLIP_QUERY);
-
   return (
     <html lang="en" className={`scroll-smooth ${comfortaa.variable}`}>
       <body className="bg-[#111424] text-white antialiased min-h-screen relative overflow-x-hidden flex flex-col">
-        
-        {/* 4. Pass the fetched track data instead of 'null' */}
-        <AudioProvider track={track}>
+
+        <AudioProvider>
           <SakuraCanvas />
           {/* A fixed, viewport-sized overlay (see GlowCursor.module.css) —
               a plain sibling like SakuraCanvas, not a wrapper around

@@ -1,7 +1,10 @@
 import Navbar from "@/components/Navbar";
 import { client } from '@/sanity/lib/client';
 
-export const revalidate = 0;
+// revalidate: 0 forced a live, uncached Sanity round-trip on every request
+// before any HTML could be sent — see app/page.tsx for the same fix and
+// reasoning. 60s keeps content close to live without blocking every visit.
+export const revalidate = 60;
 
 interface SanitySong {
   title: string;
