@@ -166,9 +166,7 @@
   font-style: italic;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .plane,
-  .track {
-    will-change: auto;
-  }
-}
+/* No prefers-reduced-motion override here anymore — the wall still drifts
+   (just much slower, see REDUCED_MOTION_SPEED_FACTOR in GalleryDriftWall.tsx)
+   rather than going fully static, so the will-change hint below is still
+   earning its keep instead of promoting a layer for nothing. */

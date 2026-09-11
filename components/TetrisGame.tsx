@@ -170,10 +170,24 @@ export const formatTime = (ms: number) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
 };
 
-const calculateDropInterval = (level: number) => {
-  const speed = Math.pow(0.8 - ((level - 1) * 0.007), level - 1) * 1000;
-  return speed < 15 ? 0 : speed;
-};
+const DROP_INTERVALS = [
+  0,    // index 0 unused
+  1400, // level 1
+  1100, // level 2
+  840,  // level 3
+  630,  // level 4
+  460,  // level 5
+  325,  // level 6
+  220,  // level 7
+  142,  // level 8
+  88,   // level 9
+  50,   // level 10
+  34,   // level 11
+  28,   // level 12 — cap
+] as const;
+
+const calculateDropInterval = (level: number): number =>
+  DROP_INTERVALS[Math.min(level, DROP_INTERVALS.length - 1)];
 
 const WALL_KICKS: Record<string, {x: number, y: number}[]> = {
   '0-1': [{x:0,y:0}, {x:-1,y:0}, {x:-1,y:-1}, {x:0,y:2},  {x:-1,y:2}],
@@ -274,6 +288,10 @@ const sweepLines = (boardMatrix: number[][]): number => {
 // insertion helper — all pure so lockPiece can call straight into them.
 const GARBAGE_VALUE = 8;
 const COMBO_ATTACK = [0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5];
+// Combo score bonus — exponential curve; combo length is the main score
+// driver rather than a flat per-combo multiplier. Index = combo count
+// (1-based). Values past the table end extrapolate at +1500/combo.
+const COMBO_BONUS = [0, 150, 350, 700, 1200, 1900, 2800, 3900, 5200, 6700, 8400, 10000];
 
 const getBaseAttack = (linesCleared: number, tSpin: boolean): number => {
   if (tSpin) return linesCleared === 1 ? 2 : linesCleared === 2 ? 4 : linesCleared === 3 ? 6 : 0;
@@ -483,7 +501,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   const linesRef = useRef(0);
   const levelRef = useRef(startingLevel ?? 1);
   const lastMoveRef = useRef<'move' | 'rotate' | 'drop' | null>(null);
-  const b2bRef = useRef(false);
+  const b2bRef = useRef(0);
   const comboRef = useRef(-1);
   const actionTextRef = useRef({ text: '', timer: 0 });
 
@@ -887,7 +905,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       // interruption. Gravity/level stays at whatever the player dialed in.
       board.current = createMatrix(COLS, ROWS);
       comboRef.current = -1;
-      b2bRef.current = false;
+      b2bRef.current = 0;
       dropCounter.current = 0;
       // Restart the practice stopwatch — set to 0 here so update() reinitializes
       // it from the current frame's time next tick; the direct innerText write
@@ -917,7 +935,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
         setLivesDisplay(livesRemainingRef.current);
         board.current = createMatrix(COLS, ROWS);
         comboRef.current = -1;
-        b2bRef.current = false;
+        b2bRef.current = 0;
         dropCounter.current = 0;
         actionTextRef.current = {
           text: `TOP OUT\n${livesRemainingRef.current} ${livesRemainingRef.current === 1 ? 'LIFE' : 'LIVES'} LEFT`,
@@ -1014,7 +1032,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     scoreRef.current = 0; linesRef.current = 0; levelRef.current = 1; holdPieceRef.current = null; 
     dropInterval.current = calculateDropInterval(1);
     
-    comboRef.current = -1; b2bRef.current = false; actionTextRef.current = {text: '', timer: 0};
+    comboRef.current = -1; b2bRef.current = 0; actionTextRef.current = {text: '', timer: 0};
     nextPiecesRef.current = [...generateBag(rngRef.current), ...generateBag(rngRef.current)];
     
     player.current.type = nextPiecesRef.current.shift()!;
@@ -1059,31 +1077,39 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
 
       if (tSpin) {
         isDifficult = true;
-        if (linesCleared === 1) { baseScore = 800; actionStr = 'T-Spin Single'; }
-        else if (linesCleared === 2) { baseScore = 1200; actionStr = 'T-Spin Double'; }
-        else if (linesCleared === 3) { baseScore = 1600; actionStr = 'T-Spin Triple'; }
+        if (linesCleared === 1) { baseScore = 200; actionStr = 'T-Spin Single'; }
+        else if (linesCleared === 2) { baseScore = 420; actionStr = 'T-Spin Double'; }
+        else if (linesCleared === 3) { baseScore = 680; actionStr = 'T-Spin Triple'; }
       } else {
-        if (linesCleared === 1) { baseScore = 100; }
-        else if (linesCleared === 2) { baseScore = 300; }
-        else if (linesCleared === 3) { baseScore = 500; }
-        else if (linesCleared === 4) { baseScore = 800; actionStr = 'Tetris'; isDifficult = true; }
+        if (linesCleared === 1) { baseScore = 80; }
+        else if (linesCleared === 2) { baseScore = 200; }
+        else if (linesCleared === 3) { baseScore = 380; }
+        else if (linesCleared === 4) { baseScore = 600; actionStr = 'Tetris'; isDifficult = true; }
       }
 
-      let calculatedScore = baseScore * levelRef.current;
-      
+      // Flat base scores — level does NOT multiply; chains/streaks are the
+      // score engine instead.
+      let calculatedScore = baseScore;
+
+      // Streak (B2B) — flat additive bonus, no multiplier.
       if (isDifficult) {
-        if (b2bRef.current) {
-          calculatedScore = Math.floor(calculatedScore * 1.5);
+        if (b2bRef.current > 0) {
+          const streakBonus = Math.min(150 + b2bRef.current * 60, 700);
+          calculatedScore += streakBonus;
           actionStr = 'B2B ' + actionStr;
           if (mode === 'versus') attack += 1;
         }
-        b2bRef.current = true;
+        b2bRef.current++;
       } else {
-        b2bRef.current = false;
+        b2bRef.current = 0;
       }
 
+      // Combo bonus — exponential curve, the main score driver.
       if (comboRef.current > 0) {
-        calculatedScore += 50 * comboRef.current * levelRef.current;
+        const comboBonus = comboRef.current < COMBO_BONUS.length
+          ? COMBO_BONUS[comboRef.current]
+          : COMBO_BONUS[COMBO_BONUS.length - 1] + (comboRef.current - COMBO_BONUS.length + 1) * 1500;
+        calculatedScore += comboBonus;
         actionStr += `\n${comboRef.current} Combo`;
         if (mode === 'versus') attack += COMBO_ATTACK[Math.min(comboRef.current, COMBO_ATTACK.length - 1)];
       }
@@ -1100,7 +1126,10 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       // starting level keeps climbing from there instead of being clobbered
       // by the first line clear.
       if (!isSandboxRules) {
-        levelRef.current = (startingLevel ?? 1) + Math.floor(linesRef.current / 10);
+        // Triangular threshold: lines needed to reach level N from 0 = N*(N-1)/2*5
+        // (5, 15, 30, 50, 75, 105, 140…). Progression starts slow, ramps each level.
+        const levelUps = Math.floor((1 + Math.sqrt(1 + 8 * linesRef.current / 5)) / 2) - 1;
+        levelRef.current = (startingLevel ?? 1) + levelUps;
         dropInterval.current = calculateDropInterval(levelRef.current);
       }
 

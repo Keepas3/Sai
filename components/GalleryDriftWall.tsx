@@ -51,6 +51,15 @@ const SPEED = 42;
 const VARIANCE = 0.45;
 const PARALLAX = 0.6;
 
+// prefers-reduced-motion used to fully freeze the drift — but it's the only
+// thing on the whole site that checks this flag, so on a machine where it's
+// on for an unrelated reason (a laptop's battery/performance toggle, not a
+// deliberate motion-sensitivity choice) the wall looked broken/frozen while
+// everything else kept animating normally. A heavily slowed drift instead
+// of a hard stop still respects the setting's intent — much calmer motion —
+// without reading as "this part of the site doesn't work."
+const REDUCED_MOTION_SPEED_FACTOR = 0.2;
+
 const MOBILE_COLUMNS = 3;
 const MOBILE_TILE_WIDTH = 104;
 const MOBILE_TILE_HEIGHT = 72;
@@ -214,11 +223,12 @@ export default function GalleryDriftWall({ items, onSelect, isPaused = false }: 
       pointerDampedRef.current.y += (targetY - pointerDampedRef.current.y) * damp;
       applyPlaneTransform(pointerDampedRef.current.x, pointerDampedRef.current.y);
 
-      if (!pausedRef.current && !reduced) {
+      if (!pausedRef.current) {
+        const motionScale = reduced ? REDUCED_MOTION_SPEED_FACTOR : 1;
         for (let c = 0; c < trackRefs.current.length; c++) {
           const meta = columnMeta[c];
           if (!meta) continue;
-          const target = hoveredColRef.current === c ? 0 : baseVelocities[c];
+          const target = hoveredColRef.current === c ? 0 : baseVelocities[c] * motionScale;
 
           const ease = 1 - Math.exp(-dt / (target === 0 ? 0.16 : 0.28));
           velocitiesRef.current[c] += (target - velocitiesRef.current[c]) * ease;
