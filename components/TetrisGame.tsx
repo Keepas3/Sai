@@ -170,6 +170,25 @@ export const formatTime = (ms: number) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
 };
 
+// Zen/Practice never counts down. Blitz and Sprint (40 Lines) count down by
+// default but respect the user's saved "Skip Countdown" preference; every
+// other mode (versus/coop, synced off room startAt) is untouched.
+const shouldSkipCountdown = (mode: string, skipCountdownSetting: boolean) =>
+  mode === 'standard' || mode === 'practice' ||
+  ((mode === 'blitz' || mode === 'sprint') && skipCountdownSetting);
+
+// Read synchronously (not via the async localStorage-load effect) so the
+// very first render doesn't flash a countdown before flipping to PLAYING.
+const readSkipCountdownSetting = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const saved = window.localStorage.getItem('tetrisTuning');
+    return saved ? Boolean(JSON.parse(saved).skipCountdown) : false;
+  } catch {
+    return false;
+  }
+};
+
 const DROP_INTERVALS = [
   0,    // index 0 unused
   1400, // level 1
@@ -533,7 +552,9 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   const opponentBoardsRef = useRef(opponentBoards);
   useEffect(() => { opponentBoardsRef.current = opponentBoards; }, [opponentBoards]);
 
-  const [gameState, setGameState] = useState<'COUNTDOWN' | 'PLAYING' | 'NAME_ENTRY' | 'LEADERBOARD'>('COUNTDOWN');
+  const [gameState, setGameState] = useState<'COUNTDOWN' | 'PLAYING' | 'NAME_ENTRY' | 'LEADERBOARD'>(
+    () => shouldSkipCountdown(mode, readSkipCountdownSetting()) ? 'PLAYING' : 'COUNTDOWN'
+  );
   const gameStateRef = useRef(gameState);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
@@ -730,7 +751,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   const [listeningAction, setListeningAction] = useState<string | null>(null);
   const listeningActionRef = useRef<string | null>(null);
   
-  const [tuning, setTuning] = useState({ das: 170, arr: 30, dcd: 0, sdf: 40 });
+  const [tuning, setTuning] = useState({ das: 170, arr: 30, dcd: 0, sdf: 40, skipCountdown: false });
   const tuningRef = useRef(tuning);
   
   const [controls, setControls] = useState({
@@ -765,7 +786,10 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     const savedControls = localStorage.getItem('tetrisControls');
     
     if (savedTuning) {
-      try { setTuning(JSON.parse(savedTuning)); } catch (e) { console.error('Failed to parse tuning'); }
+      // Merge onto the defaults — a saved object from before `skipCountdown`
+      // existed wouldn't have that key, and a wholesale replace would leave
+      // it `undefined` instead of falling back to `false`.
+      try { setTuning(prev => ({ ...prev, ...JSON.parse(savedTuning) })); } catch (e) { console.error('Failed to parse tuning'); }
     }
     if (savedControls) {
       // Merge onto the defaults rather than replacing outright — a saved
@@ -1057,7 +1081,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     }
 
     setNameInput('');
-    setGameState('COUNTDOWN');
+    setGameState(shouldSkipCountdown(mode, tuningRef.current.skipCountdown) ? 'PLAYING' : 'COUNTDOWN');
     syncUi();
   };
 
@@ -2208,6 +2232,18 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
                     </div>
                     <input type="range" min="2" max="41" step="1" value={tuning.sdf} onChange={(e) => setTuning(p => ({...p, sdf: Number(e.target.value)}))} style={{ width: '100%', accentColor: 'var(--tt-accent)', height: '4px' }} />
                   </div>
+
+                  {(mode === 'blitz' || mode === 'sprint') && (
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', paddingTop: '0.25rem' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>Skip Countdown</span>
+                      <input
+                        type="checkbox"
+                        checked={tuning.skipCountdown}
+                        onChange={(e) => setTuning(p => ({ ...p, skipCountdown: e.target.checked }))}
+                        style={{ accentColor: 'var(--tt-accent)', width: '16px', height: '16px', cursor: 'pointer' }}
+                      />
+                    </label>
+                  )}
                 </div>
               </>
             )}
@@ -2220,7 +2256,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
                     <span style={{ color: 'white', fontSize: '10px' }}>{uiState.level}</span>
                   </div>
                   <input
-                    type="range" min="1" max="20" step="1"
+                    type="range" min="1" max={DROP_INTERVALS.length - 1} step="1"
                     value={uiState.level}
                     onChange={(e) => {
                       const level = Number(e.target.value);
