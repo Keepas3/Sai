@@ -544,7 +544,7 @@ input:disabled {
 /* ==========================================================================
    GLASSY BLUE BLOG LINKS (FORCED OVERRIDE)
    ========================================================================== */
-a.glass-link-btn {
+.glass-link-btn {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -564,11 +564,21 @@ a.glass-link-btn {
     -webkit-backdrop-filter: blur(12px) !important;
 }
 
-a.glass-link-btn:hover {
+.glass-link-btn:hover {
     background-color: rgba(59, 130, 246, 0.3) !important;
     border-color: rgba(96, 165, 250, 0.6) !important;
     transform: translateY(-4px) !important;
     box-shadow: 0 12px 25px rgba(59, 130, 246, 0.25) !important;
+}
+
+/* Wraps just the link text now (the ⋮ icon is a sibling <button>, not part
+   of this anchor), so clicking the text still navigates while the icon can
+   open its own popup instead. */
+.glass-link-text-wrap {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    text-decoration: none !important;
 }
 
 .glass-link-text {
@@ -584,21 +594,62 @@ a.glass-link-btn:hover {
     transition: color 0.3s ease !important;
 }
 
-a.glass-link-btn:hover .glass-link-text {
+.glass-link-btn:hover .glass-link-text {
     color: #ffffff !important;
 }
 
-.glass-link-icon {
+button.glass-link-icon {
     position: absolute !important;
     right: 20px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
     color: rgba(147, 197, 253, 0.6) !important;
     font-size: 20px !important;
     font-weight: bold !important;
+    line-height: 1 !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 4px !important;
+    z-index: 1 !important;
     transition: color 0.3s ease !important;
 }
 
-a.glass-link-btn:hover .glass-link-icon {
+.glass-link-btn:hover .glass-link-icon {
     color: rgba(191, 219, 254, 1) !important;
+}
+
+.glass-link-menu {
+    position: absolute !important;
+    top: calc(100% + 6px) !important;
+    right: 12px !important;
+    z-index: 20 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-width: 130px !important;
+    padding: 6px !important;
+    background-color: rgba(20, 22, 30, 0.92) !important;
+    border: 1px solid rgba(96, 165, 250, 0.3) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.45) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+}
+
+button.glass-link-menu-item {
+    background: transparent !important;
+    border: none !important;
+    text-align: left !important;
+    padding: 8px 10px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: #dbeafe !important;
+    transition: background-color 0.15s ease, color 0.15s ease !important;
+}
+
+button.glass-link-menu-item:hover {
+    background-color: rgba(96, 165, 250, 0.18) !important;
+    color: #ffffff !important;
 }
 
     /* ==========================================================================

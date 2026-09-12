@@ -145,15 +145,20 @@ interface StreakEntry {
 
 const WEEKDAY_ORDER = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// Which weekday a draw falls on, read in the same America/New_York calendar
-// day the reset logic already uses — so a draw at 11pm Pacific (which is
-// past midnight Eastern) lands on the day ET considers "today," matching
-// which reset window it actually counted toward.
+// Which weekday a draw falls on — labeled by the *fortune-day* it belongs
+// to, not the raw ET calendar day. The box resets at RESET_HOUR_EASTERN
+// (4 AM), not at midnight, so a draw at e.g. 1 AM Monday and a second draw
+// later that same Monday (after the 4 AM reset) are two different
+// fortune-days even though both fall on the calendar date "Monday" — they'd
+// otherwise both get labeled "Mon" in the history grid despite being a
+// 2-day streak. Shifting back by the reset hour before reading the ET
+// weekday makes the label track the reset boundary instead of midnight.
 function getWeekdayLabel(date: Date): string {
+  const shifted = new Date(date.getTime() - RESET_HOUR_EASTERN * 60 * 60 * 1000);
   return new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
     weekday: 'short',
-  }).format(date);
+  }).format(shifted);
 }
 
 // `previousPeriodEnd` is the reset boundary that followed the last open

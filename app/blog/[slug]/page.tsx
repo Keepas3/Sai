@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import { PortableText, PortableTextComponents } from '@portabletext/react';
 import Link from 'next/link';
 import imageUrlBuilder from '@sanity/image-url';
+import BlogLinkButton from '@/components/BlogLinkButton';
 
 // Initialize the image builder utility
 const builder = imageUrlBuilder(client);
@@ -83,27 +84,11 @@ const blogComponents: PortableTextComponents = {
     ),
     
     // ─── UPDATED: INLINE GLASSY BLUE LINK RENDERER ───
-    // ─── UPDATED: FOOLPROOF GLASSY BLUE LINK RENDERER ───
-    link: ({ children, value }) => {
-      const rel = !value?.href?.startsWith('/') ? 'noreferrer noopener' : undefined;
-      const target = !value?.href?.startsWith('/') ? '_blank' : undefined;
-      
-      return (
-        <a 
-          href={value?.href} 
-          rel={rel} 
-          target={target}
-          className="glass-link-btn"
-        >
-          <span className="glass-link-text">
-            {children}
-          </span>
-          <span className="glass-link-icon">
-            ⋮
-          </span>
-        </a>
-      );
-    },
+    // The ⋮ icon opens a share/copy popup (BlogLinkButton) instead of just
+    // following the link like the rest of the row.
+    link: ({ children, value }) => (
+      <BlogLinkButton href={value?.href}>{children}</BlogLinkButton>
+    ),
   },
 };
 
