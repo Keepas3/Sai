@@ -1,0 +1,231 @@
+/* Ported from a reactbits-style "AccordionGallery" example. The reference
+   drives every transition through GSAP; here plain CSS `transition` does the
+   interpolation instead, driven off inline styles/custom properties set from
+   React state in AccordionGallery.tsx (see that file's top comment). */
+
+@property --ag-gray {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --ag-dim {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.35;
+}
+
+.accordionGallery {
+  --ag-accent: #ffffff;
+  --ag-overlay: #060010;
+  --ag-text: #ffffff;
+  --ag-gap: 10px;
+  --ag-radius: 16px;
+  --ag-media-size: 320px;
+  --ag-duration: 0.6s;
+  --ag-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ag-stagger: 0.06s;
+
+  display: flex;
+  flex-direction: row;
+  gap: var(--ag-gap);
+  width: 100%;
+  max-width: 100%;
+  perspective: 1400px;
+  perspective-origin: 50% 50%;
+}
+
+.accordionGallery.vertical {
+  flex-direction: column;
+}
+
+.panel {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  cursor: pointer;
+  display: block;
+  text-decoration: none;
+  outline: none;
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  background: #0a0713;
+  box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.8);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    flex-grow var(--ag-duration) var(--ag-ease),
+    transform var(--ag-duration) var(--ag-ease);
+}
+
+.panel:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--ag-accent),
+    0 10px 30px -18px rgba(0, 0, 0, 0.8);
+}
+
+.frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  /* Registered via @property above so this can interpolate smoothly rather
+     than snap — both .media's filter and .overlay's background read these
+     inherited values and recompute every frame the browser interpolates
+     them, with no transition needed on either of those elements directly. */
+  transition:
+    --ag-gray var(--ag-duration) var(--ag-ease),
+    --ag-dim var(--ag-duration) var(--ag-ease);
+}
+
+.media {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--ag-media-size);
+  height: 100%;
+  filter: grayscale(var(--ag-gray, 1));
+  transition: transform var(--ag-duration) var(--ag-ease);
+}
+
+.accordionGallery.vertical .media {
+  width: 100%;
+  height: var(--ag-media-size);
+}
+
+.media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, transparent 45%, color-mix(in srgb, var(--ag-overlay) 78%, transparent) 100%),
+    color-mix(in srgb, var(--ag-overlay) calc(var(--ag-dim, 0.35) * 100%), transparent);
+}
+
+.label {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.bar {
+  flex: 0 0 auto;
+  width: 3px;
+  height: 26px;
+  border-radius: 3px;
+  background: var(--ag-accent);
+  opacity: 0;
+  transform: translateX(-14px);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ag-accent) 60%, transparent);
+  transition:
+    opacity var(--ag-duration) var(--ag-ease),
+    transform var(--ag-duration) var(--ag-ease);
+}
+
+.textGroup {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.text {
+  color: var(--ag-text);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: clamp(1rem, 1.4vw, 1.4rem);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateX(-14px);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+  transition:
+    opacity var(--ag-duration) var(--ag-ease),
+    transform var(--ag-duration) var(--ag-ease);
+}
+
+/* Small, subdued line under the title. */
+.description {
+  color: color-mix(in srgb, var(--ag-text) 75%, transparent);
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  opacity: 0;
+  transform: translateX(-14px);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+  transition:
+    opacity var(--ag-duration) var(--ag-ease),
+    transform var(--ag-duration) var(--ag-ease);
+}
+
+.panelActive .bar,
+.panelActive .text,
+.panelActive .description {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Stagger the bar-then-text(+description) reveal only when activating. */
+.panelActive .text,
+.panelActive .description {
+  transition-delay: var(--ag-stagger);
+}
+
+/* Hide everything together, faster, with no stagger, when deactivating. */
+.panel:not(.panelActive) .bar,
+.panel:not(.panelActive) .text,
+.panel:not(.panelActive) .description {
+  transition-duration: calc(var(--ag-duration) * 0.6);
+}
+
+@media (max-width: 520px) {
+  .accordionGallery {
+    flex-direction: column;
+    perspective: none;
+    height: auto !important;
+  }
+  .panel {
+    min-height: 84px;
+    transform: none !important;
+  }
+  .accordionGallery .media {
+    width: 100%;
+    height: var(--ag-media-size);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .frame,
+  .media,
+  .bar,
+  .text,
+  .description {
+    transition-duration: 0s !important;
+  }
+}
