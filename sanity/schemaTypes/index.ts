@@ -5,7 +5,7 @@ import { categoryType } from './category'
 import music from './music'
 import game from './game'
 import {bookType} from './book'
-import project from './project'
+import { projectEntryType } from './projectEntry'
 import galleryTopic from './galleryTopic'
 import galleryItem from './galleryItem'
 import nowPlaying from './nowPlaying'
@@ -22,7 +22,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     music,
     game,
     bookType,
-    project,
+    projectEntryType,
     galleryTopic,
     galleryItem,
     nowPlaying,

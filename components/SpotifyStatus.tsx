@@ -64,11 +64,11 @@ export default function SpotifyStatus() {
   // console.log('Parsed Bottom Layout Track ID:', historyTrackId);
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-xl mx-auto">
-      
+    <div className="flex flex-col gap-2 w-full max-w-xl mx-auto">
+
       {showTopCard && currentTrackId && (
-        <div className="flex flex-col gap-5">
-          <span 
+        <div className="flex flex-col gap-1.5">
+          <span
             className="text-[10px] font-mono uppercase tracking-wider pl-1 transition-colors duration-300"
             style={{ color: isNowPlaying ? '#a1a1aa' : '#1DB954' }}
           >
@@ -90,7 +90,7 @@ export default function SpotifyStatus() {
       )}
 
       {/* 2. BOTTOM CARD: Dynamic History Layout / Secondary Downstream Sequence */}
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-1.5">
         <span className="text-[10px] font-mono uppercase tracking-wider pl-1 transition-colors duration-300"
           style={{ color: isNowPlaying ? '#1DB954' : '#a1a1aa' }}>
           {isNowPlaying ? 'On Rotation' : 'Previously Listened'}

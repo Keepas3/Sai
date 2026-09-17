@@ -97,8 +97,12 @@ export const structure: StructureResolver = (S) =>
       // 4. Active Projects
       S.listItem()
         .title('Projects')
-        .schemaType('project')
-        .child(S.documentTypeList('project').title('Projects')),
+        .schemaType('projectEntry')
+        .child(
+          S.documentTypeList('projectEntry')
+            .title('Projects')
+            .initialValueTemplates([S.initialValueTemplateItem('projectEntry')])
+        ),
       
       // 5. Gallery
       S.listItem()

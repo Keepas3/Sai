@@ -71,11 +71,11 @@ export default function Footer() {
   return (
     <footer className="site-footer">
       
-      <div className="w-full max-w-4xl mx-auto px-6 flex flex-col items-center justify-center text-center gap-6">
-        
+      <div className="w-full max-w-4xl mx-auto px-6 flex flex-col items-center justify-center text-center gap-3">
+
         {/* --- The Ambient Zen Quote --- */}
-        <div 
-          className={`transition-opacity duration-700 ease-in-out flex flex-col items-center justify-center min-h-[80px] w-full ${
+        <div
+          className={`transition-opacity duration-700 ease-in-out flex flex-col items-center justify-center min-h-[60px] w-full ${
             isVisible ? 'opacity-100' : 'opacity-0'
           }`}
         >
@@ -85,9 +85,9 @@ export default function Footer() {
                 "{activeQuote.text}"
               </p>
               {activeQuote.author && (
-                <span 
-                  
-                  className="block text-[11px] uppercase tracking-[0.1em] text-[#e5729f] mt-8 not-italic"
+                <span
+
+                  className="block text-[11px] uppercase tracking-[0.1em] text-[#e5729f] mt-3 not-italic"
                   style={{ fontFamily: '"Bahnschrift", sans-serif' }}
                 >
                   — {activeQuote.author}
@@ -100,18 +100,22 @@ export default function Footer() {
         </div>
 
         {/* --- Copyright --- */}
-        <div className="w-full flex justify-center mt-2">
-          <p className="text-[11px] font-mono tracking-widest text-[#b3a1a6] uppercase m-0">
-            © {currentYear}&nbsp;Sai. All rights reserved. &emsp; 
-            <a href="/terms-of-service" target = "_blank" className="text-[11px] font-mono tracking-widest text-[#b3a1a6] uppercase ml-4 ">
-              Terms of Service
-            </a>
-            &emsp;
-            <a href="/privacy-policy" target = "_blank" className="text-[11px] font-mono tracking-widest text-[#b3a1a6] uppercase ml-4">
-              Privacy Policy
-            </a>
+        <div className="w-full flex justify-center">
+          {/* Two flex items (copyright text, links group) so a narrow
+              viewport wraps them onto two clean rows instead of breaking
+              mid-phrase inside "Terms of Service". */}
+          <p className="text-[11px] font-mono tracking-widest text-[#b3a1a6] uppercase m-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+            <span className="whitespace-nowrap">© {currentYear}&nbsp;Sai. All rights reserved.</span>
+            <span className="flex items-center gap-4">
+              <a href="/terms-of-service" target="_blank" className="text-[11px] font-mono tracking-widest text-[#b3a1a6] uppercase whitespace-nowrap">
+                Terms of Service
+              </a>
+              <a href="/privacy-policy" target="_blank" className="text-[11px] font-mono tracking-widest text-[#b3a1a6] uppercase whitespace-nowrap">
+                Privacy Policy
+              </a>
+            </span>
           </p>
-          
+
         </div>
 
       </div>

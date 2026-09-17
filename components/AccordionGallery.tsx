@@ -105,7 +105,7 @@ export default function AccordionGallery({
   // Collapsed panels get a bit more breathing room (flex-grow > 1) and only
   // partial grayscale, rather than being tiny and fully desaturated — keeps
   // the non-featured panels legible instead of reading as "dead" filler.
-  const COLLAPSED_GROW = 1.3;
+  const COLLAPSED_GROW = 0.7;
   const COLLAPSED_GRAY = 0.55;
 
   const grow = count > 1 ? (ratio * (count - 1)) / (1 - ratio) : 1;
@@ -160,7 +160,14 @@ export default function AccordionGallery({
         // Dynamic tag mirrors the same pattern already used in
         // app/projects/page.tsx for its project cards.
         const Tag = (item.link ? 'a' : 'div') as any;
-        const linkProps = item.link ? { href: item.link, target: '_blank', rel: 'noreferrer noopener' } : {};
+        // Only force a new tab for external links — an internal route (e.g.
+        // "/projects/slug") should navigate in-tab like any other link.
+        // Same convention already used in BlogLinkButton.tsx / the blog's
+        // link mark.
+        const isExternal = !!item.link && !item.link.startsWith('/');
+        const linkProps = item.link
+          ? { href: item.link, ...(isExternal ? { target: '_blank', rel: 'noreferrer noopener' } : {}) }
+          : {};
 
         return (
           <Tag

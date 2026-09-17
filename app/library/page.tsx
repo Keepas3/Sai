@@ -132,8 +132,8 @@ export default function LibraryPage() {
       
                   setIsTetrisOpen(true);
                 }}
-                /* Pushed slightly further left (-left-12), bumped z-index to 50, and added padding (p-2) for a bigger hitbox */
-                className="absolute -left-12 top-1/2 -translate-y-1/2 z-50 cursor-pointer group transition-all duration-500 outline-none border-none bg-transparent p-2"
+                /* Tucked under the Games tab (not off to the left of the pill), bumped z-index to 50, and added padding (p-2) for a bigger hitbox */
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-50 cursor-pointer group transition-all duration-500 outline-none border-none bg-transparent p-2"
                 title="Play Raining Blocks"
               >
                 <img

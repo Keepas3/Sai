@@ -31,7 +31,7 @@ export default {
       type: 'array',
       title: 'Featured Dashboard Projects',
       description: 'Select and drag-and-drop order your projects.',
-      of: [{ type: 'reference', to: [{ type: 'project' }] }]
+      of: [{ type: 'reference', to: [{ type: 'projectEntry' }] }]
     },
     // --- THIS ENABLES DRAG & DROP FOR GAMES ---
     {

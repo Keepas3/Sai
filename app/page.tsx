@@ -25,7 +25,8 @@ interface DashboardProject {
   title: string;
   description: string;
   projectLink?: string;
-  imageUrl?: string; 
+  slug: string;
+  imageUrl?: string;
 }
 
 interface HomeMediaItem {
@@ -42,7 +43,7 @@ interface DashboardCategory {
 
 export default async function Home() {
   const data = await client.fetch(`{
-    "profile": *[_type == "profile"] | order(_updatedAt desc)[0] {
+    "profile": *[_id == "profile"][0] {
       name,
       bio,
       "avatarUrl": avatar.asset->url,
@@ -51,13 +52,12 @@ export default async function Home() {
     "fortuneSlip": *[_type == "fortuneSlip"][0]{
       fortuneSlips
     },
-    "projectsData": *[_type == "project" && defined(projectList)] | order(_updatedAt desc)[0] {
-      projectList[] {
-        title,
-        description,
-        projectLink,
-        "imageUrl": image.asset->url
-      }
+    "featuredProjects": *[_id == "profile"][0].featuredProjects[]-> {
+      title,
+      description,
+      projectLink,
+      "slug": slug.current,
+      "imageUrl": images[0].asset->url
     },
     
     "gamesData": *[_type == "game" && defined(gamesList)][0] {
@@ -101,7 +101,7 @@ export default async function Home() {
 
   const profile: ProfileData | null = data.profile;
   const fortuneSlip = data.fortuneSlip;
-  const projects: DashboardProject[] = data.projectsData?.projectList || [];
+  const projects: DashboardProject[] = data.featuredProjects || [];
   
   const games: HomeMediaItem[] = data.gamesData?.gamesList || [];
   const books: HomeMediaItem[] = data.booksData?.booksList || [];
@@ -152,7 +152,7 @@ export default async function Home() {
         </div>
 
         {/* --- DASHBOARD STYLED ELEMENT GRIDS --- */}
-        <div className="status-rows-container mt-16">
+        <div className="status-rows-container">
           
           {/* ROW 1: Spotify & Consolidated Activity Tracker */}
           <div className="top-activity-row">
@@ -161,18 +161,18 @@ export default async function Home() {
             <div className="status-box flex flex-col justify-between">
               <div>
                 {/* FIXED: Gap adjusted to 8px; custom top margin removed to lift icon up */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '0.5rem' }}>
-                  <svg 
-                    className="text-[#e5729f] shrink-0" 
-                    fill="currentColor" 
-                    viewBox="0 0 24 24" 
-                    style={{ width: '20px', height: '20px', marginTop: '-4px' }} 
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '0.25rem' }}>
+                  <svg
+                    className="text-[#e5729f] shrink-0"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                    style={{ width: '20px', height: '20px', marginTop: '-4px' }}
                   >
                     <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
                   </svg>
                   <h3 className="text-lg font-bold text-white m-0 leading-none">Currently Listening</h3>
                 </div>
-                <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest mb-4"></p>
+                <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest mb-1"></p>
               </div>
               
               <div className="w-full">
@@ -183,12 +183,12 @@ export default async function Home() {
             {/* --- CONSOLIDATED CURRENT ACTIVITY COLUMN --- */}
             <div className="status-box">
               {/* FIXED: Unified gap to 8px; icon alignment shifted upwards via negative margin */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.5rem' }}>
-                <svg 
-                  className="text-[#e5729f] shrink-0" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  strokeWidth="2" 
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0' }}>
+                <svg
+                  className="text-[#e5729f] shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth="2"
                   stroke="currentColor"
                   style={{ width: '20px', height: '20px', marginTop: '-2px' }}
                 >
@@ -196,7 +196,7 @@ export default async function Home() {
                 </svg>
                 <h3 className="text-lg font-bold text-white m-0 leading-none">Activity Tracker</h3>
               </div>
-              <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest mb-4"></p>
+              <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest mb-1"></p>
               
               <div className="flex flex-col gap-5">
                 
@@ -263,7 +263,7 @@ export default async function Home() {
 
           {/* ROW 2: Featured Active Project */}
           <div className="projects-row">
-            <div className="status-box w-100">
+            <div className="status-box w-full">
               
               {/* FIXED: Standardized row spacing structure to match top row layouts */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.5rem' }}>
@@ -304,18 +304,12 @@ export default async function Home() {
               </div>
             )}
                   <h4>
-                    {activeProject.projectLink ? (
-                      <a 
-                        href={activeProject.projectLink} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="text-[#e5729f] hover:underline inline-flex items-center gap-1 cursor-pointer"
-                      >
-                        {activeProject.title} <span className="text-xs opacity-60">↗</span>
-                      </a>
-                    ) : (
-                      activeProject.title
-                    )}
+                    <Link
+                      href={`/projects/${activeProject.slug}`}
+                      className="text-[#e5729f] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      {activeProject.title} <span className="text-xs opacity-60">→</span>
+                    </Link>
                   </h4>
                   <p className="status-text mt-1">{activeProject.description}</p>
                 </div>
@@ -326,7 +320,7 @@ export default async function Home() {
 
           {/* ROW 3: Blog Exploration Grid Layout */}
           <div className="blog-topics-row mt-8">
-            <div className="status-box w-100">
+            <div className="status-box w-full">
               <h3>Blogs</h3>
               <p className="status-text mb-4 text-white/60">Some interesting things that come up in my life.</p>
               
