@@ -53,7 +53,7 @@ export default function AccordionGallery({
   accentColor = '#ffffff',
   overlayColor = '#060010',
   textColor = '#ffffff',
-  height = 460,
+  height = 567,
   gap = 10,
   radius = 16,
   expandRatio = 0.52,

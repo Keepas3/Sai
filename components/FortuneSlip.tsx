@@ -583,7 +583,7 @@ export default function FortuneSlip({
           onClick={handleClose}
         >
           <div
-            className="relative w-full max-w-[280px]"
+            className="relative w-full max-w-[320px]"
             style={
               {
                 animation: 'fortune-emerge 420ms cubic-bezier(0.16,1,0.3,1) both',
@@ -689,17 +689,17 @@ export default function FortuneSlip({
                         <p className="text-center text-[10px] font-mono uppercase tracking-[0.3em] text-[#8b5a3c]">
                           This Week's Fortunes
                         </p>
-                        <div className="mt-2 grid grid-cols-7 gap-1">
+                        <div className="mt-2 grid grid-cols-4 gap-1.5">
                           {WEEKDAY_ORDER.map((day) => {
                             const entry = streakHistory.find((item) => item.weekday === day);
                             return (
-                              <div key={day} className="flex flex-col items-center gap-1">
+                              <div key={day} className="flex flex-col items-center gap-1 min-w-0">
                                 <span className="text-[8px] font-mono uppercase tracking-wide text-[#8b5a3c]/70">
                                   {day}
                                 </span>
                                 <div
                                   title={entry?.title}
-                                  className={`flex h-14 w-full items-center justify-center rounded-md border px-1 text-center text-[8.5px] leading-snug ${
+                                  className={`flex h-14 w-full min-w-0 items-center justify-center rounded-md border px-1 text-center text-[9px] leading-snug ${
                                     entry
                                       ? 'border-[#8b5a3c]/30 bg-[#f2cf95]/50 text-[#4a2b16]'
                                       : 'border-dashed border-[#8b5a3c]/15 bg-transparent text-[#8b5a3c]/30'
