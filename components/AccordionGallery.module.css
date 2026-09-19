@@ -207,15 +207,30 @@
   .accordionGallery {
     flex-direction: column;
     perspective: none;
-    height: auto !important;
+    /* Was `auto !important` — but a column flex container with an
+       auto/intrinsic height has no extra space for flex-grow to
+       distribute, so every panel just collapsed to its min-height floor
+       and the active one never actually looked bigger. Keeping the
+       height the component already computes (still a plain number here,
+       since this is a CSS-only breakpoint, not the `orientation="vertical"`
+       JS prop) gives flex-grow a real budget to work with, so the accordion
+       effect still shows while stacked. Panels can still grow past this if
+       there are enough of them that even their min-heights don't fit. */
+    min-height: 420px;
   }
   .panel {
     min-height: 84px;
     transform: none !important;
   }
   .accordionGallery .media {
+    /* Fill the panel's actual (now-variable, active-vs-collapsed) height
+       instead of the fixed `--ag-media-size` px value computed from the
+       container's WIDTH — that fixed value is sized for the horizontal
+       layout's media strip, not this stacked layout's much taller active
+       panel, which is exactly what left empty letterbox space above/below
+       the photo. */
     width: 100%;
-    height: var(--ag-media-size);
+    height: 100%;
   }
 }
 

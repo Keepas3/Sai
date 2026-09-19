@@ -460,8 +460,12 @@ const TouchControlButton = ({
       fontWeight: 'bold',
       borderRadius: '10px',
       border: '1px solid var(--tt-accent)',
-      backgroundColor: 'color-mix(in srgb, var(--tt-accent) 25%, transparent)',
-      color: 'var(--tt-accent)',
+      // A solid-ish dark backing (not just a translucent accent tint) so
+      // these stay legible over any Sanity-configurable background theme —
+      // a light theme made the old accent-on-accent version nearly invisible.
+      backgroundColor: 'color-mix(in srgb, var(--tt-accent) 20%, rgba(10, 8, 12, 0.82))',
+      color: '#ffffff',
+      textShadow: '0 1px 3px rgba(0, 0, 0, 0.6)',
       touchAction: 'manipulation',
       WebkitUserSelect: 'none',
       userSelect: 'none',
