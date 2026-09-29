@@ -11,8 +11,8 @@ import Link from 'next/link';
 // enabled on the whole canvas). Instead this renders a real DOM <Link>/
 // <img> that fades in at a random spot every so often — only present in
 // the DOM while visible, so it never intercepts clicks otherwise.
-const SANDWICH_CAT_CHECK_INTERVAL_MS = 5_000;
-const SANDWICH_CAT_PROBABILITY = 0.010;
+const SANDWICH_CAT_CHECK_INTERVAL_MS = 7_000;
+const SANDWICH_CAT_PROBABILITY = 0.025;
 const SANDWICH_CAT_VISIBLE_MS = 7_000;
 const SANDWICH_CAT_SIZE_PX = 19; // ~70% smaller than the original 64px
 
@@ -76,7 +76,7 @@ export default function SakuraCanvas() {
         // --- 1. SAKURA ASSETS & RATIO LAYOUT CONFIGS ---
         const regularPaths = ['/sakura.png', '/sakura2.png'];
         const rarePath = '/reimu.png'; // 
-        const rareProbability = 0.02;       // ◄ 0.5 = 50% chance to spawn this asset
+        const rareProbability = 0.03;       // ◄ 0.5 = 50% chance to spawn this asset
 
         const regularImages: HTMLImageElement[] = [];
         let rareImage: HTMLImageElement | null = null;
