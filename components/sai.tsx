@@ -1,9 +1,71 @@
-'use client'; 
+'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+
+// Second, much rarer easter egg — independent of the canvas petal system
+// below. It can't be drawn as another falling petal: the canvas is
+// `pointer-events-none` and sits behind all page content, so a canvas
+// sprite can't be reliably clicked without fragile hit-testing (and risks
+// swallowing clicks meant for the rest of the site if pointer-events were
+// enabled on the whole canvas). Instead this renders a real DOM <Link>/
+// <img> that fades in at a random spot every so often — only present in
+// the DOM while visible, so it never intercepts clicks otherwise.
+const SANDWICH_CAT_CHECK_INTERVAL_MS = 5_000;
+const SANDWICH_CAT_PROBABILITY = 0.010;
+const SANDWICH_CAT_VISIBLE_MS = 7_000;
+const SANDWICH_CAT_SIZE_PX = 19; // ~70% smaller than the original 64px
+
+// Picks a spot hugging one of the four screen edges (vw/vh %) — never
+// anywhere near the center — so the sandwich cat stays a peripheral find
+// rather than something planted in the middle of whatever you're reading.
+const EDGE_MARGIN = 8; // vw/vh % — how close to the true edge it can land
+const EDGE_BAND = 14; // vw/vh % — how deep the "hugging the edge" band is
+function getRandomEdgePosition() {
+    const side = Math.floor(Math.random() * 4); // 0: left, 1: right, 2: top, 3: bottom
+    const along = EDGE_MARGIN + Math.random() * (100 - EDGE_MARGIN * 2);
+    const near = EDGE_MARGIN + Math.random() * (EDGE_BAND - EDGE_MARGIN);
+
+    switch (side) {
+        case 0: return { x: near, y: along };
+        case 1: return { x: 100 - near, y: along };
+        case 2: return { x: along, y: near };
+        default: return { x: along, y: 100 - near };
+    }
+}
 
 export default function SakuraCanvas() {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const [sandwichCatPos, setSandwichCatPos] = useState<{ x: number; y: number } | null>(null);
+    const [sandwichCatFadeIn, setSandwichCatFadeIn] = useState(false);
+
+    useEffect(() => {
+        const rollForSandwichCat = setInterval(() => {
+            setSandwichCatPos((current) => {
+                if (current) return current; // already showing — don't restart it
+                if (Math.random() >= SANDWICH_CAT_PROBABILITY) return current;
+                return getRandomEdgePosition();
+            });
+        }, SANDWICH_CAT_CHECK_INTERVAL_MS);
+
+        return () => clearInterval(rollForSandwichCat);
+    }, []);
+
+    useEffect(() => {
+        if (!sandwichCatPos) return;
+
+        setSandwichCatFadeIn(false);
+        const fadeInId = setTimeout(() => setSandwichCatFadeIn(true), 20);
+        const hideId = setTimeout(() => {
+            setSandwichCatFadeIn(false);
+            setTimeout(() => setSandwichCatPos(null), 500); // let the fade-out finish first
+        }, SANDWICH_CAT_VISIBLE_MS);
+
+        return () => {
+            clearTimeout(fadeInId);
+            clearTimeout(hideId);
+        };
+    }, [sandwichCatPos]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -147,9 +209,29 @@ export default function SakuraCanvas() {
     }, []);
 
     return (
-        <canvas
-            ref={canvasRef}
-            className="fixed top-0 left-0 z-[-1] pointer-events-none block"
-        />
+        <>
+            <canvas
+                ref={canvasRef}
+                className="fixed top-0 left-0 z-[-1] pointer-events-none block"
+            />
+            {sandwichCatPos && (
+                <Link
+                    href="/sandwich-cat"
+                    className="fixed z-1050 transition-opacity duration-500"
+                    style={{
+                        left: `${sandwichCatPos.x}%`,
+                        top: `${sandwichCatPos.y}%`,
+                        opacity: sandwichCatFadeIn ? 1 : 0,
+                    }}
+                    aria-label="A very rare sandwich cat"
+                >
+                    <img
+                        src="/sandwich_cat.png"
+                        alt="Sandwich cat"
+                        style={{ width: `${SANDWICH_CAT_SIZE_PX}px`, height: 'auto', display: 'block' }}
+                    />
+                </Link>
+            )}
+        </>
     );
 }
