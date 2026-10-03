@@ -1,0 +1,60 @@
+name: Supabase keep-alive
+
+# Free-plan Supabase projects pause after ~7 days of low activity.
+# This makes a real table read against each project every 3 days.
+on:
+  schedule:
+    - cron: '17 9 */3 * *' # 09:17 UTC, every 3rd day of the month (max gap 3 days)
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    strategy:
+      fail-fast: false # one failing project must not hide the other
+      matrix:
+        include:
+          - name: saiushi
+            url_secret: SUPABASE_URL
+            key_secret: SUPABASE_ANON_KEY
+          - name: tetris-arena
+            url_secret: ARENA_SUPABASE_URL
+            key_secret: ARENA_SUPABASE_ANON_KEY
+    steps:
+      - name: Query tetris_scores (${{ matrix.name }})
+        env:
+          SUPABASE_URL: ${{ secrets[matrix.url_secret] }}
+          SUPABASE_KEY: ${{ secrets[matrix.key_secret] }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "::error::Missing secrets ${{ matrix.url_secret }} / ${{ matrix.key_secret }}"
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            --retry 3 --retry-delay 5 --retry-all-errors \
+            --max-time 20 \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            "${SUPABASE_URL%/}/rest/v1/tetris_scores?select=name&limit=1"
+          echo
+          echo "OK: ${{ matrix.name }} responded"
+
+  # Public repos get scheduled workflows auto-disabled after 60 days without
+  # repo activity. Re-enabling ourselves on each run is a best-effort guard.
+  stay-enabled:
+    needs: ping
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+    steps:
+      - name: Re-enable this workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PUT \
+            "repos/${{ github.repository }}/actions/workflows/supabase-keepalive.yml/enable"
