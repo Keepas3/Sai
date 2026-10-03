@@ -1,7 +1,7 @@
 name: Supabase keep-alive
 
 # Free-plan Supabase projects pause after ~7 days of low activity.
-# This makes a real table read against each project every 3 days.
+# This makes a real table read against the project every 3 days.
 on:
   schedule:
     - cron: '17 9 */3 * *' # 09:17 UTC, every 3rd day of the month (max gap 3 days)
@@ -13,24 +13,14 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     timeout-minutes: 2
-    strategy:
-      fail-fast: false # one failing project must not hide the other
-      matrix:
-        include:
-          - name: saiushi
-            url_secret: SUPABASE_URL
-            key_secret: SUPABASE_ANON_KEY
-          - name: tetris-arena
-            url_secret: ARENA_SUPABASE_URL
-            key_secret: ARENA_SUPABASE_ANON_KEY
     steps:
-      - name: Query tetris_scores (${{ matrix.name }})
+      - name: Query tetris_scores
         env:
-          SUPABASE_URL: ${{ secrets[matrix.url_secret] }}
-          SUPABASE_KEY: ${{ secrets[matrix.key_secret] }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
-            echo "::error::Missing secrets ${{ matrix.url_secret }} / ${{ matrix.key_secret }}"
+            echo "::error::Missing secrets SUPABASE_URL / SUPABASE_ANON_KEY"
             exit 1
           fi
           curl --fail --silent --show-error \
@@ -40,7 +30,7 @@ jobs:
             -H "Authorization: Bearer $SUPABASE_KEY" \
             "${SUPABASE_URL%/}/rest/v1/tetris_scores?select=name&limit=1"
           echo
-          echo "OK: ${{ matrix.name }} responded"
+          echo "OK: Supabase responded"
 
   # Public repos get scheduled workflows auto-disabled after 60 days without
   # repo activity. Re-enabling ourselves on each run is a best-effort guard.
