@@ -2,7 +2,8 @@
 
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { COLS, ROWS, BLOCK_SIZE, COLORS, PIECES } from './tetrisConstants';
-import { supabase } from '../app/utils/supabaseClient'; 
+import { supabase } from '../app/utils/supabaseClient';
+import { DEFAULT_BLITZ_MINUTES, DEFAULT_SPRINT_GOAL, scoreKeyFor } from './gameModeConfig';
 
 // Mirrors useOnlineRoom's BoardSnapshotPayload minus guestId — one object
 // param rather than positional args, since this has grown from 5 fields
@@ -25,6 +26,14 @@ interface BoardSnapshot {
   lockedPieceMatrix?: number[][];
   lockedPieceX?: number;
   lockedPieceY?: number;
+  // Journey co-op only. Merge-only sync can add cells but can't express
+  // "wipe the board" or "rows were pushed up from below", so those two shared-
+  // board events are broadcast as explicit instructions the partner replays:
+  // sharedBoardCleared (a topout soft-reset), and the exact garbage insertion
+  // (count + gap column) that the sender's lock just applied.
+  sharedBoardCleared?: boolean;
+  insertedGarbageCount?: number;
+  insertedGarbageGapCol?: number;
 }
 
 interface TetrisGameProps {
@@ -109,6 +118,24 @@ interface TetrisGameProps {
   // Next queue is shown to their partner as a read-only preview. Defaults
   // to false/unset, matching Phase A's behavior exactly.
   sharedNextHold?: boolean;
+  // "Journey to the East" — solo passes mode="journey"; co-op keeps
+  // mode="coop" and sets journey. Journey topouts soft-reset the board
+  // instead of ending the run, incoming garbage is accepted (Survive the
+  // Storm), and the event callbacks below drive the challenge scoring (see
+  // useJourneyRun). All of them are optional and unused by every other mode.
+  journey?: boolean;
+  // Caps the level (and so the gravity speed) — Journey tops out at 8.
+  maxLevel?: number;
+  // Solo-mode settings from the title screen's mode popup. 40 Lines: lines to
+  // clear (default 40). Blitz: round length in minutes (default 3). Each
+  // setting scores on its own leaderboard — see scoreKeyFor.
+  sprintGoal?: number;
+  blitzMinutes?: number;
+  onTSpin?: (type: 'single' | 'double' | 'triple') => void;
+  onLinesCleared?: (count: number, isTetris: boolean, isPerfectClear: boolean) => void;
+  onCombo?: (streak: number) => void;
+  onPiecePlaced?: () => void;
+  onTopout?: () => void;
 }
 
 interface ScoreEntry {
@@ -128,8 +155,6 @@ const GAME_CURSOR =
   'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="%23e5729f" stroke-opacity="0.45" stroke-width="2"/><circle cx="10" cy="10" r="4.5" fill="%23e5729f"/></svg>\') 10 10, pointer';
 
 const MAX_LEADERBOARD = 8;
-const SPRINT_GOAL = 40;
-const BLITZ_TIME_LIMIT = 3 * 60 * 1000; // 3 minutes in milliseconds
 // Versus-only: how often the game loop broadcasts this client's live board +
 // active piece to opponents (see the `update()` loop and MiniBoard), on top
 // of the existing once-per-lock broadcast. Frequent enough to read as
@@ -317,14 +342,18 @@ const getBaseAttack = (linesCleared: number, tSpin: boolean): number => {
   return linesCleared === 2 ? 1 : linesCleared === 3 ? 2 : linesCleared === 4 ? 4 : 0;
 };
 
-const insertGarbageRows = (boardMatrix: number[][], count: number) => {
-  const gapCol = Math.floor(Math.random() * COLS);
+// gapCol is optional: omitted = pick one at random (versus, and the side that
+// originates a garbage insertion). Journey co-op passes the originator's
+// column back in so the partner's copy of the shared board gets identical
+// rows. Returns the column used.
+const insertGarbageRows = (boardMatrix: number[][], count: number, gapCol: number = Math.floor(Math.random() * COLS)) => {
   for (let i = 0; i < count; i++) {
     boardMatrix.shift();
     const row = new Array(COLS).fill(GARBAGE_VALUE);
     row[gapCol] = 0;
     boardMatrix.push(row);
   }
+  return gapCol;
 };
 
 const rotate = (matrix: number[][], dir: number) => {
@@ -481,7 +510,7 @@ const TouchControlButton = ({
 // 2. MAIN REACT COMPONENT
 // ==========================================
 
-export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, onEliminated, eliminatedOpponentIds, opponentIds, onRematchMenu, seed, startingLevel, lives, onBoardUpdate, opponentBoards, opponentNicknames, onMatchWin, quitVotes, selfQuitVote, quitVoteDeadline, onQuitVote, onRetractQuitVote, sharedNextHold }: TetrisGameProps) {
+export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, onEliminated, eliminatedOpponentIds, opponentIds, onRematchMenu, seed, startingLevel, lives, onBoardUpdate, opponentBoards, opponentNicknames, onMatchWin, quitVotes, selfQuitVote, quitVoteDeadline, onQuitVote, onRetractQuitVote, sharedNextHold, journey, maxLevel, sprintGoal, blitzMinutes, onTSpin, onLinesCleared, onCombo, onPiecePlaced, onTopout }: TetrisGameProps) {
   // 'practice' = Sandbox's single-player ruleset (adjustable gravity, spawn
   // hotkeys, clear-on-topout, no leaderboard) running inside the same
   // multiplayer room/preview plumbing 'versus' uses, minus the competitive
@@ -501,6 +530,32 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   // (isMultiplayerRoom's other use sites — the 1-on-1/compact preview
   // column — should NOT pick coop up).
   const isCoop = mode === 'coop';
+  // Journey = solo (mode 'journey') or co-op with the journey flag. Like
+  // `mode`, both props are fixed for one mount, so the mount-only game loop's
+  // closure can read this safely.
+  const isJourneySolo = mode === 'journey';
+  const isJourney = isJourneySolo || (isCoop && !!journey);
+  // Mode-popup settings. Fixed for one mount like `mode`, so the mount-only
+  // game loop's closure can read them. scoreKey is what the run is saved and
+  // ranked under: default settings keep the bare 'sprint'/'blitz' keys.
+  const sprintGoalLines = sprintGoal ?? DEFAULT_SPRINT_GOAL;
+  const blitzLimitMs = (blitzMinutes ?? DEFAULT_BLITZ_MINUTES) * 60 * 1000;
+  const scoreKey = scoreKeyFor(mode, { sprintGoal, blitzMinutes });
+  // The mount-only game loop captures its closure once, so the journey
+  // callbacks go through refs (same reason as the isCoop opponentBoardsRef
+  // below) — otherwise they'd call whatever handler existed at mount forever.
+  const onTSpinRef = useRef(onTSpin);
+  const onLinesClearedRef = useRef(onLinesCleared);
+  const onComboRef = useRef(onCombo);
+  const onPiecePlacedRef = useRef(onPiecePlaced);
+  const onTopoutRef = useRef(onTopout);
+  useEffect(() => {
+    onTSpinRef.current = onTSpin;
+    onLinesClearedRef.current = onLinesCleared;
+    onComboRef.current = onCombo;
+    onPiecePlacedRef.current = onPiecePlaced;
+    onTopoutRef.current = onTopout;
+  }, [onTSpin, onLinesCleared, onCombo, onPiecePlaced, onTopout]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const timeDisplayRef = useRef<HTMLParagraphElement>(null);
   const requestRef = useRef<number>(0);
@@ -535,7 +590,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   // starting from the same seed means both bags are the same underlying
   // sequence rather than two unrelated random streams). Solo modes and
   // practice fall through to Math.random.
-  const rngRef = useRef<() => number>((mode === 'versus' || mode === 'coop') && seed != null ? mulberry32(seed) : Math.random);
+  const rngRef = useRef<() => number>((mode === 'versus' || mode === 'coop' || isJourneySolo) && seed != null ? mulberry32(seed) : Math.random);
   const nextPiecesRef = useRef<number[]>([...generateBag(rngRef.current), ...generateBag(rngRef.current)]);
   const holdPieceRef = useRef<number | null>(null);
   const canHoldRef = useRef(true);
@@ -621,10 +676,10 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   // client's own attack and actually inserted into the board on the next
   // piece lock (see lockPiece), not on arrival.
   useEffect(() => {
-    if (mode !== 'versus' || !incomingGarbage) return;
+    if (!(mode === 'versus' || isJourney) || !incomingGarbage) return;
     pendingGarbageRef.current += incomingGarbage.amount;
     setPendingGarbageDisplay(pendingGarbageRef.current);
-  }, [mode, incomingGarbage]);
+  }, [mode, isJourney, incomingGarbage]);
 
   // Last-player-standing: once every opponent in the starting roster has
   // broadcast their own elimination, this client has outlasted the room —
@@ -648,13 +703,15 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   // client never topped out. `.some()`, not versus's `.every()` — coop is
   // always exactly one partner, and either one topping out is enough.
   useEffect(() => {
-    if (mode !== 'coop' || matchEndedRef.current) return;
+    // Journey co-op never ends this way — a topout is a soft-reset, and a
+    // partner leaving is handled by useJourneyRun's own result banner.
+    if (mode !== 'coop' || isJourney || matchEndedRef.current) return;
     if (!opponentIds || opponentIds.length === 0) return;
     if (!opponentIds.some((id) => eliminatedOpponentIds?.includes(id))) return;
     matchEndedRef.current = true;
     setGameState('LEADERBOARD');
     syncUi();
-  }, [mode, eliminatedOpponentIds, opponentIds]);
+  }, [mode, isJourney, eliminatedOpponentIds, opponentIds]);
 
   // Mid-match Quit is a group vote, not a unilateral leave (see the Left
   // Panel Quit button below) — resolved independently by every client from
@@ -696,6 +753,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   // partner's, in any arrival order, converges to the same board shape —
   // so a stale-relative-to-something-else broadcast can no longer erase
   // progress the sender didn't know about yet.
+  const lastReplayedPartnerRef = useRef<unknown>(null);
   useEffect(() => {
     if (!isCoop) return;
     const partner = opponentBoards?.[0];
@@ -714,9 +772,29 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     // its displayed number — otherwise a client whose partner is further
     // ahead would show the higher level but keep falling at their own
     // stale, slower speed.
-    if (partner.level > levelRef.current) {
-      levelRef.current = partner.level;
+    const partnerLevel = maxLevel != null ? Math.min(maxLevel, partner.level) : partner.level;
+    if (partnerLevel > levelRef.current) {
+      levelRef.current = partnerLevel;
       dropInterval.current = calculateDropInterval(levelRef.current);
+    }
+    // Journey co-op: replay the two shared-board events merge-only sync can't
+    // express (see BoardSnapshot). Unlike merge()/Math.max above these are NOT
+    // idempotent, so each partner snapshot object is applied at most once.
+    if (isJourney && partner !== lastReplayedPartnerRef.current) {
+      lastReplayedPartnerRef.current = partner;
+      if (partner.sharedBoardCleared) {
+        board.current = createMatrix(COLS, ROWS);
+        comboRef.current = -1;
+        b2bRef.current = 0;
+        pendingGarbageRef.current = 0;
+        setPendingGarbageDisplay(0);
+      }
+      if (partner.insertedGarbageCount != null && partner.insertedGarbageGapCol != null) {
+        insertGarbageRows(board.current, partner.insertedGarbageCount, partner.insertedGarbageGapCol);
+        // The shared board's garbage debt was just collectively paid.
+        pendingGarbageRef.current = 0;
+        setPendingGarbageDisplay(0);
+      }
     }
     // Hold is a genuinely shared slot when sharedNextHold is on — not just
     // visible to the partner but a single resource either player can swap
@@ -737,7 +815,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       holdPieceRef.current = partner.hold;
     }
     syncUi();
-  }, [isCoop, opponentBoards, sharedNextHold]);
+  }, [isCoop, isJourney, maxLevel, opponentBoards, sharedNextHold]);
 
   // Live countdown for the Left Panel's vote banner — ticks locally off the
   // shared quitVoteDeadline timestamp, same "every client ticks its own
@@ -858,8 +936,8 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       const { data, error } = await supabase
         .from('tetris_scores')
         .select('name, score, level, mode')
-        .eq('mode', mode) 
-        .order('score', { ascending: mode === 'sprint' }) 
+        .eq('mode', scoreKey)
+        .order('score', { ascending: mode === 'sprint' })
         .limit(MAX_LEADERBOARD);
 
       if (error) {
@@ -876,8 +954,8 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     // Sandbox/Practice don't score or compete, and versus/coop matches
     // aren't ranked against the solo leaderboard either — none of them have
     // one to show or fetch.
-    if (!isSandboxRules && mode !== 'versus' && mode !== 'coop') fetchLeaderboard();
-  }, [mode, isSandboxRules]);
+    if (!isSandboxRules && mode !== 'versus' && mode !== 'coop' && !isJourneySolo) fetchLeaderboard();
+  }, [mode, scoreKey, isSandboxRules, isJourneySolo]);
 
   const saveHighScore = async () => {
     if (isSubmitting) return;
@@ -887,7 +965,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     const score = Math.floor(scoreRef.current);
     const level = levelRef.current;
 
-    const newEntry: ScoreEntry = { name, score, level, mode };
+    const newEntry: ScoreEntry = { name, score, level, mode: scoreKey };
 
     const updatedLocal = [...leaderboard, newEntry]
       .sort((a, b) => mode === 'sprint' ? a.score - b.score : b.score - a.score)
@@ -899,7 +977,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     try {
       const { error } = await supabase
         .from('tetris_scores')
-        .insert([{ name, score, level, mode }]);
+        .insert([{ name, score, level, mode: scoreKey }]);
 
       if (error) {
         console.error('Supabase insert error:', error.message);
@@ -927,6 +1005,30 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   };
 
   const handleGameOver = (isWin: boolean) => {
+    if (!isWin) onTopoutRef.current?.();
+    if (isJourney) {
+      // Journey never ends on a topout — the board clears and play carries on
+      // (useJourneyRun pauses scoring briefly and fails the window's survive
+      // check via onTopout above). The piece queue and level keep running.
+      board.current = createMatrix(COLS, ROWS);
+      comboRef.current = -1;
+      b2bRef.current = 0;
+      dropCounter.current = 0;
+      pendingGarbageRef.current = 0;
+      setPendingGarbageDisplay(0);
+      actionTextRef.current = { text: 'Board Cleared', timer: 1200 };
+      if (isCoop) {
+        // Tell the partner to wipe their copy too — merge-only sync would
+        // otherwise just merge their stale locked pieces back onto this clean
+        // board. Same peek-before-reset spawn math as versus's soft-reset.
+        const nextMatrix = PIECES[nextPiecesRef.current[0]];
+        const nextX = Math.floor((COLS - nextMatrix[0].length) / 2);
+        onBoardUpdate?.({ board: board.current, pieceMatrix: nextMatrix, pieceX: nextX, pieceY: 0, livesRemaining: 1, score: scoreRef.current, level: levelRef.current, lines: linesRef.current, next: nextPiecesRef.current.slice(0, 5), hold: holdPieceRef.current, sharedBoardCleared: true });
+      }
+      playerReset();
+      syncUi();
+      return;
+    }
     if (isSandboxRules) {
       // Sandbox mode never really "ends" — topping out just clears the
       // board and play continues immediately, with no leaderboard/name-entry
@@ -1080,7 +1182,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     setApm(0);
 
     if (timeDisplayRef.current) {
-        if (mode === 'blitz') timeDisplayRef.current.innerText = '03:00.000';
+        if (mode === 'blitz') timeDisplayRef.current.innerText = formatTime(blitzLimitMs);
         else if (mode === 'sprint') timeDisplayRef.current.innerText = '00:00.000';
     }
 
@@ -1091,9 +1193,14 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
 
   const lockPiece = () => {
     countPiece();
+    onPiecePlacedRef.current?.();
     merge(board.current, player.current);
     const tSpin = isTSpin();
     const linesCleared = sweepLines(board.current);
+    // Board completely empty right after a clear (only matters to Journey's
+    // Perfect Clear Hunt). Computed only when journey is on to keep every
+    // other mode's lock path unchanged.
+    const isPerfectClear = isJourney && linesCleared > 0 && board.current.every((row) => row.every((cell) => cell === 0));
 
     let attack = mode === 'versus' ? getBaseAttack(linesCleared, tSpin) : 0;
 
@@ -1157,13 +1264,20 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
         // Triangular threshold: lines needed to reach level N from 0 = N*(N-1)/2*5
         // (5, 15, 30, 50, 75, 105, 140…). Progression starts slow, ramps each level.
         const levelUps = Math.floor((1 + Math.sqrt(1 + 8 * linesRef.current / 5)) / 2) - 1;
-        levelRef.current = (startingLevel ?? 1) + levelUps;
+        const rawLevel = (startingLevel ?? 1) + levelUps;
+        levelRef.current = maxLevel != null ? Math.min(maxLevel, rawLevel) : rawLevel;
         dropInterval.current = calculateDropInterval(levelRef.current);
       }
 
       if (actionStr) actionTextRef.current = { text: actionStr, timer: 2000 };
 
-      if (mode === 'sprint' && linesRef.current >= SPRINT_GOAL) {
+      // Journey challenge events, in the order the scoring hook expects:
+      // the clear itself, then the combo it extended, then any T-spin.
+      onLinesClearedRef.current?.(linesCleared, !tSpin && linesCleared === 4, isPerfectClear);
+      if (comboRef.current > 0) onComboRef.current?.(comboRef.current);
+      if (tSpin) onTSpinRef.current?.(linesCleared === 1 ? 'single' : linesCleared === 2 ? 'double' : 'triple');
+
+      if (mode === 'sprint' && linesRef.current >= sprintGoalLines) {
          handleGameOver(true);
          return;
       }
@@ -1173,10 +1287,15 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       if (tSpin) {
         if (mode === 'blitz' || isSandboxRules || mode === 'coop') scoreRef.current += 400 * levelRef.current;
         actionTextRef.current = { text: 'T-SPIN', timer: 1500 };
+        onTSpinRef.current?.('single');
       }
     }
 
-    if (mode === 'versus') {
+    // Journey co-op: set when this lock actually applied pending garbage, so
+    // the broadcast below can hand the partner the exact rows (see
+    // BoardSnapshot.insertedGarbageCount).
+    let insertedGarbage: { count: number; gapCol: number } | undefined;
+    if (mode === 'versus' || isJourney) {
       const cancelled = Math.min(attack, pendingGarbageRef.current);
       pendingGarbageRef.current -= cancelled;
       const netAttack = attack - cancelled;
@@ -1188,7 +1307,9 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
         setAttackPerMin(min > 0 ? linesSentRef.current / min : 0);
       }
       if (pendingGarbageRef.current > 0) {
-        insertGarbageRows(board.current, pendingGarbageRef.current);
+        const count = pendingGarbageRef.current;
+        const gapCol = insertGarbageRows(board.current, count);
+        if (isCoop) insertedGarbage = { count, gapCol };
         pendingGarbageRef.current = 0;
       }
       setPendingGarbageDisplay(pendingGarbageRef.current);
@@ -1212,7 +1333,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       // run yet) — exactly the delta co-op's merge-only sync needs. Sent
       // unconditionally like score/level/lines; versus/practice just don't
       // read it.
-      onBoardUpdate?.({ board: board.current, pieceMatrix: nextMatrix, pieceX: nextX, pieceY: 0, livesRemaining: livesRemainingRef.current, score: scoreRef.current, level: levelRef.current, lines: linesRef.current, next: nextPiecesRef.current.slice(0, 5), hold: holdPieceRef.current, lockedPieceMatrix: player.current.matrix, lockedPieceX: player.current.pos.x, lockedPieceY: player.current.pos.y });
+      onBoardUpdate?.({ board: board.current, pieceMatrix: nextMatrix, pieceX: nextX, pieceY: 0, livesRemaining: livesRemainingRef.current, score: scoreRef.current, level: levelRef.current, lines: linesRef.current, next: nextPiecesRef.current.slice(0, 5), hold: holdPieceRef.current, lockedPieceMatrix: player.current.matrix, lockedPieceX: player.current.pos.x, lockedPieceY: player.current.pos.y, ...(insertedGarbage ? { insertedGarbageCount: insertedGarbage.count, insertedGarbageGapCol: insertedGarbage.gapCol } : {}) });
     }
 
     playerReset();
@@ -1408,7 +1529,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     // nor a Settings button is offered for either mode (co-op's keybind/
     // handling adjustment, like versus's, happens ahead of time in the
     // lobby's standalone Controls panel).
-    if (mode === 'versus' || mode === 'coop') return;
+    if (mode === 'versus' || mode === 'coop' || isJourneySolo) return;
     if (gameState === 'COUNTDOWN') return;
     if (showControlsRef.current && settingsTab === tab) {
       showControlsRef.current = false;
@@ -1630,13 +1751,13 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       if (!isPausedRef.current && !showControlsRef.current) {
         elapsedTimeRef.current = time - gameStartTimeRef.current;
 
-        if ((mode === 'sprint' || isSandboxRules || mode === 'versus' || isCoop) && timeDisplayRef.current) {
+        if ((mode === 'sprint' || isSandboxRules || mode === 'versus' || isCoop || isJourneySolo) && timeDisplayRef.current) {
            // Sandbox's stopwatch just counts up, same as Sprint's — it's
            // reset (not stopped) whenever the board clears, in handleGameOver.
            timeDisplayRef.current.innerText = formatTime(elapsedTimeRef.current);
         } else if (mode === 'blitz' && timeDisplayRef.current) {
            // --- NEW: BLITZ TIMER LOGIC ---
-           const timeLeft = Math.max(0, BLITZ_TIME_LIMIT - elapsedTimeRef.current);
+           const timeLeft = Math.max(0, blitzLimitMs - elapsedTimeRef.current);
            timeDisplayRef.current.innerText = formatTime(timeLeft);
 
            if (timeLeft === 0) {
@@ -1784,7 +1905,9 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       // playing is a "no" in real time — it's a free timeout only you get.
       // Keybind/handling adjustment for both lives in the lobby's
       // standalone ControlsSettings panel instead, before the match starts.
-      if ((e.key === 'p' || e.key === 'Escape') && mode !== 'versus' && mode !== 'coop') {
+      // Journey (solo too) runs on a wall-clock challenge schedule, so pausing
+      // would just let the windows tick away — it has no pause either.
+      if ((e.key === 'p' || e.key === 'Escape') && mode !== 'versus' && mode !== 'coop' && !isJourneySolo) {
         const willShow = !showControlsRef.current;
         showControlsRef.current = willShow;
         setShowControls(willShow);
@@ -1934,7 +2057,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
               handleKeyDown for why pausing isn't allowed there. Keybinds/
               handling for both are set ahead of time in the lobby's
               Controls panel instead. */}
-          {(gameState === 'PLAYING' || gameState === 'COUNTDOWN') && mode !== 'versus' && mode !== 'coop' && (
+          {(gameState === 'PLAYING' || gameState === 'COUNTDOWN') && mode !== 'versus' && mode !== 'coop' && !isJourneySolo && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: isMobile ? '0.6rem' : '1.5rem' }}>
               <button
                 onClick={() => openPanel('controls')}
@@ -2131,7 +2254,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
         )}
 
         {/* LEADERBOARD OVERLAY */}
-        {gameState === 'LEADERBOARD' && mode !== 'versus' && mode !== 'coop' && (
+        {gameState === 'LEADERBOARD' && mode !== 'versus' && mode !== 'coop' && !isJourneySolo && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 30, padding: '2rem 1.5rem', overflowY: 'auto' }}>
             <h3 style={{ color: 'white', letterSpacing: '0.2em', marginBottom: '1.5rem', marginTop: 0, fontSize: '1.25rem', textShadow: '0 0 10px rgba(255,255,255,0.3)' }}>LEADERBOARD</h3>
             
@@ -2375,7 +2498,12 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
           simply ends right after its last row's padding, which is what
           should visually "cap" it, even though the column can now end up
           taller than the board on modes with more stat rows. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '0.5rem' : '2rem', width: isMobile ? '4rem' : (isCoop && !sharedNextHold ? 'auto' : '7rem'), flexShrink: 0, paddingTop: isMobile ? 0 : '1rem', alignItems: 'stretch', justifyContent: 'flex-start' }}>
+      {/* Journey tightens this column's spacing (1rem gaps, below) so that even
+          the tallest possible NEXT queue stays shorter than the board — this
+          column's height varies with the queued pieces (an I draws 4 rows, an
+          O only 2), and whenever it was the tallest in the row it stretched
+          the row, shifting the page by up to ~30px as pieces were placed. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '0.5rem' : (isJourney ? '1rem' : '2rem'), width: isMobile ? '4rem' : (isCoop && !sharedNextHold ? 'auto' : '7rem'), flexShrink: 0, paddingTop: isMobile ? 0 : '1rem', alignItems: 'stretch', justifyContent: 'flex-start' }}>
         {/* Own NEXT plus, in co-op with sharing off, Partner's Next sit in a
             row (x-axis) rather than one below the other — stacking them
             vertically pushed this column's height well past the board,
@@ -2385,7 +2513,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
         <div style={{ display: 'flex', flexDirection: isCoop && !sharedNextHold ? 'row' : 'column', gap: isMobile ? '0.5rem' : '1rem', alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '0.4rem' : '0.75rem' }}>
             <p style={{ fontSize: isMobile ? '0.55rem' : '0.75rem', color: 'rgba(255,255,255,0.7)', letterSpacing: '0.1em', textAlign: 'center', fontWeight: 'bold', margin: '0 auto', width: 'fit-content', padding: isMobile ? '1px 5px' : '2px 8px', backgroundColor: 'rgba(0,0,0,0.75)', borderRadius: '4px' }}>NEXT</p>
-            <div style={{ width: isMobile ? '4rem' : '7rem', backgroundColor: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.375rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '0.4rem 0' : '1rem 0', gap: isMobile ? '0.4rem' : '1.5rem', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)', margin: '0 auto' }}>
+            <div style={{ width: isMobile ? '4rem' : '7rem', backgroundColor: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.375rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '0.4rem 0' : '1rem 0', gap: isMobile ? '0.4rem' : (isJourney ? '1rem' : '1.5rem'), boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)', margin: '0 auto' }}>
                {uiState.next.slice(0, isMobile ? 3 : 5).map((type, idx) => <MiniPiece key={idx} type={type} />)}
             </div>
           </div>
@@ -2402,7 +2530,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
               {/* Same 5-piece depth as the player's own NEXT box (mirrors
                   its layout exactly), not just the one immediately-
                   following piece — per direct request. */}
-              <div style={{ width: isMobile ? '4rem' : '7rem', backgroundColor: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.375rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '0.4rem 0' : '1rem 0', gap: isMobile ? '0.4rem' : '1.5rem', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)', margin: '0 auto' }}>
+              <div style={{ width: isMobile ? '4rem' : '7rem', backgroundColor: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.375rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '0.4rem 0' : '1rem 0', gap: isMobile ? '0.4rem' : (isJourney ? '1rem' : '1.5rem'), boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)', margin: '0 auto' }}>
                 {opponentBoards[0].next.slice(0, isMobile ? 3 : 5).map((type, idx) => <MiniPiece key={idx} type={type} />)}
               </div>
             </div>
@@ -2412,7 +2540,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
         {/* Solid backdrop (matching the Hold/Next boxes) so these numbers stay
             readable no matter how bright or busy the selected background is —
             plain text sitting directly on the theme image used to wash out. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '0.5rem' : '1rem', backgroundColor: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.375rem', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)', padding: isMobile ? '0.4rem 0.35rem' : '1rem 0.85rem', textAlign: 'right' }}>
+        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: isMobile ? '0.5rem' : '1rem', backgroundColor: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.375rem', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)', padding: isMobile ? '0.4rem 0.35rem' : '1rem 0.85rem', textAlign: 'right' }}>
 
           {/* --- UI RENDER BRANCHING --- */}
           {mode === 'sprint' ? (
@@ -2426,7 +2554,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
               <div>
                 <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Lines Left</p>
                 <p style={{ fontSize: isMobile ? '0.9rem' : '1.25rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0 }}>
-                  {Math.max(0, SPRINT_GOAL - uiState.lines)}
+                  {Math.max(0, sprintGoalLines - uiState.lines)}
                 </p>
               </div>
               <div>
@@ -2463,15 +2591,19 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
                 <p style={{ fontSize: isMobile ? '0.9rem' : '1.25rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0 }}>{attackPerMin.toFixed(1)}</p>
               </div>
             </>
-          ) : mode === 'coop' ? (
+          ) : mode === 'coop' || isJourneySolo ? (
             // Team-shared stats — score/level/lines are adopted from
             // whichever client's broadcast arrives most recently (see the
             // isCoop adopt effect), so both players' HUDs read the same.
+            // Journey (solo too) scores through the challenge bars instead,
+            // so the raw point total is hidden there.
             <>
+              {!isJourney && (
               <div>
                 <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Score</p>
                 <p style={{ fontSize: isMobile ? '0.9rem' : '1.25rem', color: 'var(--tt-accent)', fontWeight: 'bold', textShadow: '0 0 8px color-mix(in srgb, var(--tt-accent) 50%, transparent)', margin: 0 }}>{uiState.score}</p>
               </div>
+              )}
               <div>
                 <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Time</p>
                 <p ref={timeDisplayRef} style={{ fontSize: isMobile ? '0.8rem' : '1.125rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
@@ -2496,7 +2628,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
               <div>
                 <p style={{ fontSize: isMobile ? '7px' : '10px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', margin: 0 }}>Time Left</p>
                 <p ref={timeDisplayRef} style={{ fontSize: isMobile ? '0.8rem' : '1.125rem', color: 'rgba(255,255,255,0.95)', fontWeight: 'bold', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
-                  03:00.000
+                  {formatTime(blitzLimitMs)}
                 </p>
               </div>
               <div>
@@ -2544,8 +2676,19 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
               times, pushing the box well past its actual stat rows); it
               just briefly grows the box while a message is showing, same as
               any other row would. */}
-          <div>
-            {uiState.actionText && (
+          {/* Journey: the message floats just above the stats box instead (the
+              zero-height absolute wrapper below is anchored to the box's top
+              edge, see its `position: relative`), so showing/hiding it never
+              changes the box's — and therefore the whole row's — height.
+              In-flow, a line clear or topout grew the page by ~15px and
+              flickered the modal's scrollbar on and off. */}
+          <div style={isJourney ? { position: 'absolute', top: 0, left: 0, right: 0, height: 0 } : undefined}>
+            {uiState.actionText && isJourney && (
+               <p style={{ position: 'absolute', right: 0, bottom: '4px', maxWidth: '100%', boxSizing: 'border-box', padding: '2px 6px', borderRadius: '4px', backgroundColor: 'rgba(0,0,0,0.75)', color: 'var(--tt-accent)', fontSize: isMobile ? '8px' : '11px', fontWeight: 'bold', textShadow: '0 0 8px color-mix(in srgb, var(--tt-accent) 80%, transparent)', margin: 0, lineHeight: 1.4, textTransform: 'uppercase', pointerEvents: 'none' }}>
+                 {uiState.actionText.split('\n').map((line, i, arr) => <React.Fragment key={i}>{line}{i < arr.length - 1 && <br/>}</React.Fragment>)}
+               </p>
+            )}
+            {uiState.actionText && !isJourney && (
                <p style={{ color: 'var(--tt-accent)', fontSize: isMobile ? '8px' : '11px', fontWeight: 'bold', textShadow: '0 0 8px color-mix(in srgb, var(--tt-accent) 80%, transparent)', margin: 0, lineHeight: 1.4, textTransform: 'uppercase' }}>
                  {uiState.actionText.split('\n').map((line, i) => <React.Fragment key={i}>{line}<br/></React.Fragment>)}
                </p>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../app/utils/supabaseClient';
+import { DEFAULT_WIN_SCORE } from './journeyChallenges';
 
 // Room/lobby + synchronized start (Phase 2) and garbage-line exchange
 // (Phase 3) over Supabase Realtime. No database table involved — presence +
@@ -49,9 +50,12 @@ export type RoomStatus = 'idle' | 'connecting' | 'waiting' | 'occupied';
 // no attacks/lives/elimination/win-condition. 'coop' = exactly two players
 // sharing one board, each controlling their own independently-falling piece
 // (see TetrisGame.tsx's isCoop) — score/level/lines are team-shared, either
-// player topping out ends it for both. Future modes (powerups) extend this
-// union rather than each getting a bespoke protocol.
-export type GameMode = 'versus' | 'practice' | 'coop';
+// player topping out ends it for both. 'journey-coop' = the same shared-board
+// co-op, but run as "Journey to the East" (see useJourneyRun): a topout
+// soft-resets instead of ending, and the pair race challenge windows to a
+// combined 100 points. Future modes (powerups) extend this union rather than
+// each getting a bespoke protocol.
+export type GameMode = 'versus' | 'practice' | 'coop' | 'journey-coop';
 
 interface ReadyPayload {
   guestId: string;
@@ -87,6 +91,9 @@ interface StartPayload {
   // shared slot both players can swap into and each player's Next queue is
   // visible to their partner, vs. staying fully private to each player.
   sharedNextHold: boolean;
+  // Journey co-op only — points to win (host's lobby setting). Optional so a
+  // client on an older build sending a start without it still parses.
+  journeyGoal?: number;
 }
 
 interface KickPayload {
@@ -106,6 +113,7 @@ interface PresenceMeta {
   lives?: number;
   gameMode?: GameMode;
   sharedNextHold?: boolean;
+  journeyGoal?: number;
   // When this client originally joined — fixed at join time (see joinedAtRef),
   // not updated by retrack(). Not part of `meta` at either track() call site
   // (added alongside it as a sibling field instead — see joinChannel/retrack),
@@ -177,6 +185,29 @@ interface BoardSnapshotPayload {
   // versus/practice/coop-without-sharing just don't read them.
   next: number[];
   hold: number | null;
+  // Journey co-op only — see TetrisGame.tsx's BoardSnapshot. Merge-only sync
+  // can't express a board wipe or rows pushed up from below, so those are
+  // sent as explicit instructions the partner replays once.
+  sharedBoardCleared?: boolean;
+  insertedGarbageCount?: number;
+  insertedGarbageGapCol?: number;
+}
+
+// Journey-mode traffic (window reports + live progress) rides one generic
+// event rather than one per message kind. The receiver only ever sees the
+// partner's messages — Supabase doesn't echo a client's own send back.
+interface JourneyMsgPayload {
+  guestId: string;
+  event: 'window-score' | 'progress';
+  payload: unknown;
+}
+
+export interface IncomingJourneyMsg {
+  event: string;
+  payload: unknown;
+  // Monotonic across the room's whole lifetime (never reset), so a consumer
+  // can tell a fresh message from one left over from a previous match.
+  seq: number;
 }
 
 interface QuickChatPayload {
@@ -224,7 +255,7 @@ function randomGuestId(): string {
 }
 
 const NICKNAME_STORAGE_KEY = 'tetris-arena:nickname';
-const DEFAULT_ROOM_SETTINGS = { maxPlayers: MAX_ROOM_SIZE, startingLevel: 1, lives: 1, gameMode: 'versus' as GameMode, sharedNextHold: false };
+const DEFAULT_ROOM_SETTINGS = { maxPlayers: MAX_ROOM_SIZE, startingLevel: 1, lives: 1, gameMode: 'versus' as GameMode, sharedNextHold: false, journeyGoal: DEFAULT_WIN_SCORE as number };
 
 export function useOnlineRoom() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
@@ -239,6 +270,7 @@ export function useOnlineRoom() {
   const [matchLives, setMatchLives] = useState<number | null>(null);
   const [matchGameMode, setMatchGameMode] = useState<GameMode | null>(null);
   const [matchSharedNextHold, setMatchSharedNextHold] = useState<boolean | null>(null);
+  const [matchJourneyGoal, setMatchJourneyGoal] = useState<number | null>(null);
   // Mid-match quit vote. selfQuitVote/quitVotes mirror selfReady/readyGuestIds
   // exactly (self tracked separately since a client doesn't receive its own
   // broadcast) — TetrisGame is what actually knows the match's active roster
@@ -249,6 +281,7 @@ export function useOnlineRoom() {
   const [quitVoteDeadline, setQuitVoteDeadline] = useState<number | null>(null);
   const quitVoteDeadlineRef = useRef<number | null>(null);
   const [incomingGarbage, setIncomingGarbage] = useState<{ amount: number; seq: number } | null>(null);
+  const [incomingJourneyMsg, setIncomingJourneyMsg] = useState<IncomingJourneyMsg | null>(null);
   const [eliminatedGuestIds, setEliminatedGuestIds] = useState<Set<string>>(new Set());
   // Same shape as BoardSnapshotPayload (one entry per opponent, keyed by
   // guestId) rather than a separately-declared type — see the
@@ -285,6 +318,7 @@ export function useOnlineRoom() {
   const guestIdRef = useRef(randomGuestId());
   const quickChatSeqRef = useRef(0);
   const garbageSeqRef = useRef(0);
+  const journeySeqRef = useRef(0);
   // Mirrors `opponents` so the presence-sync handler can diff against the
   // previous snapshot (a plain closure over `opponents` state would be stale
   // — this handler is wired up once per joinChannel call, not per render).
@@ -437,6 +471,7 @@ export function useOnlineRoom() {
           lives: meta.lives ?? 1,
           gameMode: meta.gameMode ?? 'versus',
           sharedNextHold: meta.sharedNextHold ?? false,
+          journeyGoal: meta.journeyGoal ?? DEFAULT_WIN_SCORE,
         };
         setRoomSettings(nextSettings);
         roomSettingsRef.current = nextSettings;
@@ -523,6 +558,7 @@ export function useOnlineRoom() {
       setMatchLives(payload.lives);
       setMatchGameMode(payload.gameMode);
       setMatchSharedNextHold(payload.sharedNextHold);
+      setMatchJourneyGoal(payload.journeyGoal ?? DEFAULT_WIN_SCORE);
     });
 
     // The promoting client already appended this locally (see the
@@ -538,6 +574,12 @@ export function useOnlineRoom() {
       if (payload.targetGuestId && payload.targetGuestId !== guestId) return;
       garbageSeqRef.current += 1;
       setIncomingGarbage({ amount: payload.amount, seq: garbageSeqRef.current });
+    });
+
+    channel.on('broadcast', { event: 'journey-msg' }, ({ payload }: { payload: JourneyMsgPayload }) => {
+      if (payload.guestId === guestId) return;
+      journeySeqRef.current += 1;
+      setIncomingJourneyMsg({ event: payload.event, payload: payload.payload, seq: journeySeqRef.current });
     });
 
     channel.on('broadcast', { event: 'eliminated' }, ({ payload }: { payload: EliminatedPayload }) => {
@@ -672,6 +714,14 @@ export function useOnlineRoom() {
     });
   }, []);
 
+  const sendJourneyMsg = useCallback((event: 'window-score' | 'progress', payload: unknown) => {
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'journey-msg',
+      payload: { guestId: guestIdRef.current, event, payload } satisfies JourneyMsgPayload,
+    });
+  }, []);
+
   // Broadcasts to everyone in the room (unlike sendGarbage) — there's only
   // one way to be eliminated now, and every remaining player needs to know
   // so their own "has everyone else been eliminated" count stays accurate.
@@ -749,7 +799,16 @@ export function useOnlineRoom() {
     // to merge N boards together. Force the room down to 2 the moment
     // Co-op is selected, same as any other host setting, rather than
     // letting a bigger room silently misbehave once a match starts.
-    const next = { ...roomSettingsRef.current, gameMode: m, maxPlayers: m === 'coop' ? 2 : roomSettingsRef.current.maxPlayers };
+    const next = { ...roomSettingsRef.current, gameMode: m, maxPlayers: m === 'coop' || m === 'journey-coop' ? 2 : roomSettingsRef.current.maxPlayers };
+    roomSettingsRef.current = next;
+    setRoomSettings(next);
+    retrack();
+  }, [retrack]);
+
+  // Journey co-op's points-to-win — same host-only presence-republish pattern
+  // as the other settings above.
+  const setJourneyGoal = useCallback((goal: number) => {
+    const next = { ...roomSettingsRef.current, journeyGoal: goal };
     roomSettingsRef.current = next;
     setRoomSettings(next);
     retrack();
@@ -786,7 +845,9 @@ export function useOnlineRoom() {
     setMatchLives(null);
     setMatchGameMode(null);
     setMatchSharedNextHold(null);
+    setMatchJourneyGoal(null);
     setIncomingGarbage(null);
+    setIncomingJourneyMsg(null);
     setEliminatedGuestIds(new Set());
     setOpponentBoards([]);
     // Also the destination for a passed quit-vote (TetrisGame calls this same
@@ -807,17 +868,18 @@ export function useOnlineRoom() {
     if (isHost && selfReady && allReady && !startAt) {
       const at = Date.now() + 1500;
       const seed = Math.floor(Math.random() * 2 ** 31);
-      const { startingLevel, lives, gameMode, sharedNextHold } = roomSettingsRef.current;
+      const { startingLevel, lives, gameMode, sharedNextHold, journeyGoal } = roomSettingsRef.current;
       setStartAt(at);
       setMatchSeed(seed);
       setMatchStartingLevel(startingLevel);
       setMatchLives(lives);
       setMatchGameMode(gameMode);
       setMatchSharedNextHold(sharedNextHold);
+      setMatchJourneyGoal(journeyGoal);
       channelRef.current?.send({
         type: 'broadcast',
         event: 'start',
-        payload: { startAt: at, seed, startingLevel, lives, gameMode, sharedNextHold } satisfies StartPayload,
+        payload: { startAt: at, seed, startingLevel, lives, gameMode, sharedNextHold, journeyGoal } satisfies StartPayload,
       });
     }
   }, [isHost, selfReady, allReady, startAt]);
@@ -868,12 +930,15 @@ export function useOnlineRoom() {
     matchLives,
     matchGameMode,
     matchSharedNextHold,
+    matchJourneyGoal,
     selfQuitVote,
     quitVotes,
     quitVoteDeadline,
     sendQuitVote,
     retractQuitVote,
     incomingGarbage,
+    incomingJourneyMsg,
+    sendJourneyMsg,
     eliminatedGuestIds,
     opponentBoards,
     nickname,
@@ -885,6 +950,7 @@ export function useOnlineRoom() {
     setLives,
     setGameMode,
     setSharedNextHold,
+    setJourneyGoal,
     sendKick,
     wasKicked,
     roomFull,

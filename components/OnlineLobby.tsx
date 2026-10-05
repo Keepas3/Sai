@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MAX_ROOM_SIZE, QUICK_CHAT_MESSAGES, type QuickChatEntry, type GameMode } from './useOnlineRoom';
 import ControlsSettings from './ControlsSettings';
+import { JOURNEY_GOALS } from './journeyChallenges';
 
 // Guideline-style speed curve tops out well before this (see
 // calculateDropInterval in TetrisGame.tsx) — 15 is already close to instant
@@ -46,7 +47,9 @@ interface OnlineLobbyProps {
   // Whichever opponent (or self) is hosting — drives the "(Host)" label and
   // gates the host-only settings/kick controls below.
   hostGuestId: string | null;
-  roomSettings: { maxPlayers: number; startingLevel: number; lives: number; gameMode: GameMode; sharedNextHold: boolean };
+  roomSettings: { maxPlayers: number; startingLevel: number; lives: number; gameMode: GameMode; sharedNextHold: boolean; journeyGoal: number };
+  // Journey co-op only — points both players race to (host picks it).
+  setJourneyGoal: (n: number) => void;
   setMaxPlayers: (n: number) => void;
   setStartingLevel: (n: number) => void;
   setLives: (n: number) => void;
@@ -177,7 +180,7 @@ export default function OnlineLobby({
   roomCode, isHost, opponents, selfReady, readyGuestIds, startAt,
   createRoom, joinRoom, sendReady, sendUnready, leaveRoom,
   winCount,
-  nickname, setNickname, hostGuestId, roomSettings, setMaxPlayers, setStartingLevel, setLives, setGameMode, setSharedNextHold, sendKick, wasKicked, roomFull,
+  nickname, setNickname, hostGuestId, roomSettings, setJourneyGoal, setMaxPlayers, setStartingLevel, setLives, setGameMode, setSharedNextHold, sendKick, wasKicked, roomFull,
   quickChatLog, sendQuickChat,
 }: OnlineLobbyProps) {
   const [entryMode, setEntryMode] = useState<'choose' | 'joining'>('choose');
@@ -415,14 +418,15 @@ export default function OnlineLobby({
                       <option value="versus">Versus</option>
                       <option value="practice">Practice</option>
                       <option value="coop">Co-op</option>
+                      <option value="journey-coop">Journey to the East (Co-op)</option>
                     </select>
                   ) : (
-                    <span style={{ color: 'white' }}>{roomSettings.gameMode === 'practice' ? 'Practice' : roomSettings.gameMode === 'coop' ? 'Co-op' : 'Versus'}</span>
+                    <span style={{ color: 'white' }}>{roomSettings.gameMode === 'practice' ? 'Practice' : roomSettings.gameMode === 'coop' ? 'Co-op' : roomSettings.gameMode === 'journey-coop' ? 'Journey to the East (Co-op)' : 'Versus'}</span>
                   )}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Room Size</span>
-                  {roomSettings.gameMode === 'coop' ? (
+                  {roomSettings.gameMode === 'coop' || roomSettings.gameMode === 'journey-coop' ? (
                     <span style={{ color: 'white' }}>2 players (Co-op)</span>
                   ) : isHost ? (
                     <select value={roomSettings.maxPlayers} onChange={(e) => setMaxPlayers(Number(e.target.value))} style={SETTING_SELECT_STYLE}>
@@ -434,6 +438,22 @@ export default function OnlineLobby({
                     <span style={{ color: 'white' }}>{roomSettings.maxPlayers} players</span>
                   )}
                 </div>
+                {roomSettings.gameMode === 'journey-coop' && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Points to Win</span>
+                    {isHost ? (
+                      <select value={roomSettings.journeyGoal} onChange={(e) => setJourneyGoal(Number(e.target.value))} style={SETTING_SELECT_STYLE}>
+                        {JOURNEY_GOALS.map((n) => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span style={{ color: 'white' }}>{roomSettings.journeyGoal}</span>
+                    )}
+                  </div>
+                )}
+                {/* Journey always starts at level 1 and climbs to its own cap. */}
+                {roomSettings.gameMode !== 'journey-coop' && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Starting Level</span>
                   {isHost ? (
@@ -446,6 +466,7 @@ export default function OnlineLobby({
                     <span style={{ color: 'white' }}>{roomSettings.startingLevel}</span>
                   )}
                 </div>
+                )}
                 {roomSettings.gameMode === 'versus' && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>Lives</span>

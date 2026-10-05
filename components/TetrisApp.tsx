@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import TitleScreen from './TitleScreen';
 import TetrisGame from './TetrisGame';
 import OnlineLobby from './OnlineLobby';
+import { JourneySoloGame, JourneyCoopGame } from './JourneyGame';
+import type { GameOptions } from './gameModeConfig';
 import { useOnlineRoom } from './useOnlineRoom';
 
 interface TetrisAppProps {
@@ -16,6 +18,9 @@ interface TetrisAppProps {
 export default function TetrisApp({ initialCode }: TetrisAppProps) {
   const [view, setView] = useState<'TITLE' | 'LOBBY' | 'PLAYING'>('TITLE');
   const [gameMode, setGameMode] = useState('standard');
+  // The setting picked in the title screen's mode popup (40 Lines goal, Blitz
+  // length, Journey points) — only meaningful for the solo modes.
+  const [gameOptions, setGameOptions] = useState<GameOptions>({});
   // A voluntary Back/Leave Lobby/Quit tears the room down — which would
   // otherwise make the initialCode prop below auto-rejoin all over again,
   // since it never clears itself (the URL doesn't change once the modal is
@@ -64,7 +69,7 @@ export default function TetrisApp({ initialCode }: TetrisAppProps) {
     room.sendGarbage(amount, target.guestId);
   }, [matchOpponents, room.eliminatedGuestIds, room.sendGarbage]);
 
-  const handlePlay = (mode: string) => {
+  const handlePlay = (mode: string, options: GameOptions = {}) => {
     // The title screen's "Online Play" button routes here instead of
     // straight to PLAYING — it needs a room + synchronized start before
     // there's a match to play.
@@ -74,6 +79,7 @@ export default function TetrisApp({ initialCode }: TetrisAppProps) {
     }
     setIsOnlineMatch(false);
     setGameMode(mode);
+    setGameOptions(options);
     setView('PLAYING');
   };
 
@@ -84,6 +90,11 @@ export default function TetrisApp({ initialCode }: TetrisAppProps) {
     setHasQuit(true);
     setView('TITLE');
   };
+
+  // Shared by the regular online TetrisGame and Journey co-op — Quit tears the
+  // room down, Rematch keeps it and goes back to the ready-up screen.
+  const handleOnlineQuit = () => { room.leaveRoom(); setWinCount(0); setHasQuit(true); setIsOnlineMatch(false); setView('LOBBY'); };
+  const handleOnlineRematch = () => { room.resetMatchReady(); setView('LOBBY'); };
 
   return (
     // alignItems: 'safe center' (not plain 'center') matters here — this
@@ -128,6 +139,7 @@ export default function TetrisApp({ initialCode }: TetrisAppProps) {
           setNickname={room.setNickname}
           hostGuestId={room.hostGuestId}
           roomSettings={room.roomSettings}
+          setJourneyGoal={room.setJourneyGoal}
           setMaxPlayers={room.setMaxPlayers}
           setStartingLevel={room.setStartingLevel}
           setLives={room.setLives}
@@ -141,11 +153,22 @@ export default function TetrisApp({ initialCode }: TetrisAppProps) {
         />
       )}
 
-      {view === 'PLAYING' && isOnlineMatch && (
+      {/* Journey to the East co-op — same shared-board TetrisGame, but driven by
+          useJourneyRun's challenge windows (see JourneyGame.tsx). */}
+      {view === 'PLAYING' && isOnlineMatch && room.matchGameMode === 'journey-coop' && (
+        <JourneyCoopGame
+          room={room}
+          matchOpponents={matchOpponents}
+          onMenu={handleOnlineQuit}
+          onRematchMenu={handleOnlineRematch}
+        />
+      )}
+
+      {view === 'PLAYING' && isOnlineMatch && room.matchGameMode !== 'journey-coop' && (
         <TetrisGame
           mode={room.matchGameMode === 'practice' ? 'practice' : room.matchGameMode === 'coop' ? 'coop' : 'versus'}
-          onMenu={() => { room.leaveRoom(); setWinCount(0); setHasQuit(true); setIsOnlineMatch(false); setView('LOBBY'); }}
-          onRematchMenu={() => { room.resetMatchReady(); setView('LOBBY'); }}
+          onMenu={handleOnlineQuit}
+          onRematchMenu={handleOnlineRematch}
           onAttack={handleAttack}
           incomingGarbage={room.incomingGarbage}
           onEliminated={room.sendEliminated}
@@ -169,7 +192,10 @@ export default function TetrisApp({ initialCode }: TetrisAppProps) {
 
       {/* Solo modes (Zen/40 Lines/Blitz) — unchanged from before Online Play
           existed, just gated on !isOnlineMatch now that PLAYING covers both. */}
-      {view === 'PLAYING' && !isOnlineMatch && <TetrisGame mode={gameMode} onMenu={handleMenu} />}
+      {view === 'PLAYING' && !isOnlineMatch && gameMode === 'journey' && <JourneySoloGame onMenu={handleMenu} winScore={gameOptions.journeyGoal} />}
+      {view === 'PLAYING' && !isOnlineMatch && gameMode !== 'journey' && (
+        <TetrisGame mode={gameMode} onMenu={handleMenu} sprintGoal={gameOptions.sprintGoal} blitzMinutes={gameOptions.blitzMinutes} />
+      )}
     </div>
   );
 }

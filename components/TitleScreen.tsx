@@ -4,8 +4,13 @@ import { supabase } from '../app/utils/supabaseClient'; // Adjust path if needed
 import { useBackgroundTheme } from './UseBackgroundTheme'; // Adjust path if needed
 import { useResources, type Resource } from './useResources';
 import ControlsSettings from './ControlsSettings';
+import ModeSettingsDialog from './ModeSettingsDialog';
+import {
+  BLITZ_MINUTES, DEFAULT_BLITZ_MINUTES, DEFAULT_SPRINT_GOAL, SPRINT_GOALS, scoreKeyFor,
+} from './gameModeConfig';
+import type { GameOptions, PlayableMode } from './gameModeConfig';
 interface TitleScreenProps {
-  onPlay: (mode: string) => void;
+  onPlay: (mode: string, options?: GameOptions) => void;
 }
 
 // A plain external navigation — anchor tag gives free accessibility,
@@ -51,6 +56,13 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
   // Zen/sandbox mode doesn't score or compete, so it has no leaderboard tab —
   // only the two competitive modes are selectable here.
   const [viewMode, setViewMode] = useState<'sprint' | 'blitz'>('sprint');
+  // Which setting's board is shown — each 40 Lines goal / Blitz length scores
+  // separately (see scoreKeyFor), so the panel needs a variant as well as a mode.
+  const [viewSprintGoal, setViewSprintGoal] = useState<number>(DEFAULT_SPRINT_GOAL);
+  const [viewBlitzMinutes, setViewBlitzMinutes] = useState<number>(DEFAULT_BLITZ_MINUTES);
+  const leaderboardKey = scoreKeyFor(viewMode, { sprintGoal: viewSprintGoal, blitzMinutes: viewBlitzMinutes });
+  // The mode whose rules/settings popup is open (null = closed).
+  const [pendingMode, setPendingMode] = useState<PlayableMode | null>(null);
   const {
     themeId: backgroundThemeId,
     themes: backgroundThemes,
@@ -93,7 +105,7 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
       const { data: bestData, error: bestError } = await supabase
         .from('tetris_scores')
         .select('name, score, level, mode')
-        .eq('mode', viewMode)
+        .eq('mode', leaderboardKey)
         .order('score', { ascending })
         .limit(1);
 
@@ -112,7 +124,7 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
       const { data, error } = await supabase
         .from('tetris_scores')
         .select('name, score, level, mode')
-        .eq('mode', viewMode)
+        .eq('mode', leaderboardKey)
         .gte('created_at', startOfMonthUTC)
         .order('score', { ascending })
         .limit(10); // limit of scores shown
@@ -127,7 +139,7 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
       }
     };
     fetchLeaderboard();
-  }, [viewMode]);
+  }, [viewMode, leaderboardKey]);
 
   return (
     <div
@@ -386,14 +398,36 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
             onClick={() => setViewMode('sprint')}
             style={{ flex: 1, backgroundColor: 'transparent', border: 'none', color: viewMode === 'sprint' ? '#e5729f' : 'rgba(255,255,255,0.55)', cursor: 'pointer', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: viewMode === 'sprint' ? 'bold' : 'normal', transition: 'color 0.2s' }}
           >
-            40 Lines
+            Lines
           </button>
           <button 
             onClick={() => setViewMode('blitz')}
             style={{ flex: 1, backgroundColor: 'transparent', border: 'none', color: viewMode === 'blitz' ? '#e5729f' : 'rgba(255,255,255,0.55)', cursor: 'pointer', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: viewMode === 'blitz' ? 'bold' : 'normal', transition: 'color 0.2s' }}
           >
-            Blitz (3 min)
+            Blitz
           </button>
+        </div>
+
+        {/* Variant — each setting has its own board */}
+        <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem' }}>
+          {(viewMode === 'sprint' ? SPRINT_GOALS : BLITZ_MINUTES).map((value) => {
+            const isSelected = value === (viewMode === 'sprint' ? viewSprintGoal : viewBlitzMinutes);
+            return (
+              <button
+                key={value}
+                onClick={() => (viewMode === 'sprint' ? setViewSprintGoal(value) : setViewBlitzMinutes(value))}
+                style={{
+                  flex: 1, padding: '4px 0', cursor: 'pointer', borderRadius: '4px', fontFamily: 'inherit', fontSize: '0.65rem', letterSpacing: '0.08em',
+                  color: isSelected ? 'white' : 'rgba(255,255,255,0.55)',
+                  backgroundColor: isSelected ? 'rgba(229,114,159,0.4)' : 'transparent',
+                  border: `1px solid ${isSelected ? '#e5729f' : 'rgba(255,255,255,0.12)'}`,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {viewMode === 'sprint' ? `${value} lines` : `${value} min`}
+              </button>
+            );
+          })}
         </div>
 
         {/* All-time best, pinned above the monthly list */}
@@ -449,10 +483,11 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
         </div>
       </div>
       
-      {/* Play Buttons */}
+      {/* Play Buttons — two rows: Zen + Journey, then 40 Lines + Blitz. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
         <button
-          onClick={() => onPlay('standard')}
+          onClick={() => setPendingMode('standard')}
           style={{
             backgroundColor: 'rgba(10,10,14,0.55)', border: '1px solid #e5729f', color: 'white',
             padding: '10px 24px', fontSize: '0.875rem', cursor: 'pointer', borderRadius: '8px',
@@ -467,7 +502,24 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
         </button>
 
         <button
-          onClick={() => onPlay('sprint')}
+          onClick={() => setPendingMode('journey')}
+          style={{
+            backgroundColor: 'rgba(10,10,14,0.55)', border: '1px solid #e5729f', color: 'white',
+            padding: '10px 24px', fontSize: '0.875rem', cursor: 'pointer', borderRadius: '8px',
+            textTransform: 'uppercase', letterSpacing: '0.2em', transition: 'all 0.2s',
+            textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+            boxShadow: '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)'
+          }}
+          onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(229,114,159,0.5)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 25px rgba(229,114,159,0.6)'; }}
+          onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'rgba(10,10,14,0.55)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)'; }}
+        >
+          Journey to the East
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <button
+          onClick={() => setPendingMode('sprint')}
           style={{
             backgroundColor: 'rgba(10,10,14,0.55)', border: '1px solid #e5729f', color: 'white',
             padding: '10px 24px', fontSize: '0.875rem', cursor: 'pointer', borderRadius: '8px',
@@ -482,7 +534,7 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
         </button>
 
         <button
-          onClick={() => onPlay('blitz')}
+          onClick={() => setPendingMode('blitz')}
           style={{
             backgroundColor: 'rgba(10,10,14,0.55)', border: '1px solid #e5729f', color: 'white',
             padding: '10px 24px', fontSize: '0.875rem', cursor: 'pointer', borderRadius: '8px',
@@ -493,8 +545,9 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
           onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(229,114,159,0.5)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 25px rgba(229,114,159,0.6)'; }}
           onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'rgba(10,10,14,0.55)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.4), 0 0 15px rgba(229,114,159,0.25)'; }}
         >
-          Blitz (3 min)
+          Blitz
         </button>
+      </div>
       </div>
 
       <button
@@ -513,7 +566,14 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
         Online Play
       </button>
 
-      
+      {/* Rules + setting popup for the mode that was just picked. */}
+      {pendingMode && (
+        <ModeSettingsDialog
+          mode={pendingMode}
+          onCancel={() => setPendingMode(null)}
+          onStart={(options) => { onPlay(pendingMode, options); setPendingMode(null); }}
+        />
+      )}
 
     </div>
     </div>
