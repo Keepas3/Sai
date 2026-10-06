@@ -62,6 +62,27 @@ export function useJourneyRun({ startAt, seed, link, winScore = DEFAULT_WIN_SCOR
   const partnerLiveRef = useRef(0);
   const wonRef = useRef(false);
 
+  // Solo pause (Settings panel): the challenge schedule is wall-clock, so while
+  // paused it's frozen by tracking how long we've been paused and subtracting
+  // that from "now". Co-op can't do this — both players share one schedule —
+  // so pausing there only freezes your own board.
+  const pauseStartedAtRef = useRef<number | null>(null);
+  const totalPausedMsRef = useRef(0);
+  const [paused, setPausedState] = useState(false);
+  const setPaused = useCallback((next: boolean) => {
+    if (linkRef.current) return; // co-op: clock keeps running
+    if (next && pauseStartedAtRef.current === null) {
+      pauseStartedAtRef.current = Date.now();
+      setPausedState(true);
+    } else if (!next && pauseStartedAtRef.current !== null) {
+      totalPausedMsRef.current += Date.now() - pauseStartedAtRef.current;
+      pauseStartedAtRef.current = null;
+      setPausedState(false);
+    }
+  }, []);
+  // Play-time "now": frozen at the moment the pause began, minus past pauses.
+  const playNow = useCallback(() => (pauseStartedAtRef.current ?? Date.now()) - totalPausedMsRef.current, []);
+
   const topoutPauseEndRef = useRef(0);
   const topoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (topoutTimerRef.current) clearTimeout(topoutTimerRef.current); }, []);
@@ -95,9 +116,9 @@ export function useJourneyRun({ startAt, seed, link, winScore = DEFAULT_WIN_SCOR
     if (total >= winScore && !wonRef.current) {
       wonRef.current = true;
       setWon(true);
-      if (startAt != null) setFinishedMs(Math.max(0, Date.now() - (startAt + COUNTDOWN_OFFSET_MS)));
+      if (startAt != null) setFinishedMs(Math.max(0, playNow() - (startAt + COUNTDOWN_OFFSET_MS)));
     }
-  }, [startAt, winScore]);
+  }, [startAt, winScore, playNow]);
 
   // Bank a completed window once everything needed is in. Guarded per seq so a
   // late/duplicate report can never double-count.
@@ -155,7 +176,7 @@ export function useJourneyRun({ startAt, seed, link, winScore = DEFAULT_WIN_SCOR
     const challengeStartAt = startAt + COUNTDOWN_OFFSET_MS;
 
     const tick = () => {
-      const now = Date.now();
+      const now = playNow();
       if (now < challengeStartAt) return;
 
       const newPhase = computePhase(now - challengeStartAt, challenges);
@@ -201,7 +222,7 @@ export function useJourneyRun({ startAt, seed, link, winScore = DEFAULT_WIN_SCOR
     tick();
     const id = setInterval(tick, 100);
     return () => clearInterval(id);
-  }, [startAt, seed, challenges, result, finalizeWindow, refreshTotal]);
+  }, [startAt, seed, challenges, result, finalizeWindow, refreshTotal, playNow]);
 
   // Survive the Storm needs an actual storm. Solo feeds garbage to our own
   // board; co-op sends it to the partner (both clients run this, so both
@@ -209,7 +230,9 @@ export function useJourneyRun({ startAt, seed, link, winScore = DEFAULT_WIN_SCOR
   const phaseKind = phase?.phase ?? null;
   const challengeKind = phase?.challenge.type ?? null;
   useEffect(() => {
-    if (!startAt || result !== null) return;
+    // Solo storm garbage stops while paused (Settings open) so it doesn't pile
+    // up and dump on you the moment you resume.
+    if (!startAt || result !== null || paused) return;
     if (phaseKind !== 'challenge' || challengeKind !== 'survive-storm') return;
     if (isCoop) {
       const target = linkRef.current?.partnerGuestId;
@@ -220,7 +243,7 @@ export function useJourneyRun({ startAt, seed, link, winScore = DEFAULT_WIN_SCOR
     let n = 0;
     const id = setInterval(() => setIncomingGarbage({ amount: 1, seq: ++n }), SOLO_STORM_GARBAGE_MS);
     return () => clearInterval(id);
-  }, [startAt, result, isCoop, phaseKind, challengeKind]);
+  }, [startAt, result, paused, isCoop, phaseKind, challengeKind]);
 
   const isScoring = () => Date.now() > topoutPauseEndRef.current;
 
@@ -291,5 +314,6 @@ export function useJourneyRun({ startAt, seed, link, winScore = DEFAULT_WIN_SCOR
     handleCombo,
     handlePiecePlaced,
     handleTopout,
+    setPaused,
   };
 }

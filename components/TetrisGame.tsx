@@ -136,6 +136,9 @@ interface TetrisGameProps {
   onCombo?: (streak: number) => void;
   onPiecePlaced?: () => void;
   onTopout?: () => void;
+  // Fires whenever the game becomes paused (Settings/Sandbox panel or P/Esc)
+  // or resumes. Journey solo uses it to freeze its challenge clock.
+  onPauseChange?: (paused: boolean) => void;
 }
 
 interface ScoreEntry {
@@ -155,6 +158,59 @@ const GAME_CURSOR =
   'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="%23e5729f" stroke-opacity="0.45" stroke-width="2"/><circle cx="10" cy="10" r="4.5" fill="%23e5729f"/></svg>\') 10 10, pointer';
 
 const MAX_LEADERBOARD = 8;
+
+// How many times moving/rotating a grounded piece can restart its 500ms lock
+// delay before it locks regardless. 15 is the modern-guideline value TETR.IO
+// uses; this was 7, which made pieces lock while you were still tucking/spinning.
+const LOCK_RESET_LIMIT = 15;
+
+// Hard drop only ignores a second press landing within this window. Keyboard
+// auto-repeat is already filtered (e.repeat, plus the key must be released
+// between drops), so this only exists to swallow a double-fire from the touch
+// button — it was 100ms, which ate genuinely fast back-to-back drops. Neither
+// Jstris nor TETR.IO rate-limits hard drop at all.
+const HARD_DROP_COOLDOWN_MS = 25;
+
+// Keybinds compare case-insensitively for letters. e.key is 'Z' (not 'z')
+// whenever Caps Lock or Shift is on, which silently made a bound key stop
+// responding. Named keys ('ArrowLeft', ' ', 'Shift') pass through unchanged.
+const normKey = (k: string | undefined) => (k && k.length === 1 ? k.toLowerCase() : (k ?? ''));
+
+// Rendering shortcuts. The board used to redraw every block with a live
+// `shadowBlur = 10` glow, plus 200 grid strokes, on every frame — the glow is
+// the expensive part (~4x slower on browsers without GPU canvas acceleration).
+// Each colour's block + glow is now rendered once to a small sprite and the
+// static background/grid once to a layer; per frame it's just drawImage.
+// The result looks the same — the sprite carries the identical glow.
+const GLOW_PAD = 14; // room around the block for the 10px blur to fade out
+const blockSpriteCache = new Map<string, HTMLCanvasElement>();
+const getBlockSprite = (color: string): HTMLCanvasElement => {
+  let sprite = blockSpriteCache.get(color);
+  if (!sprite) {
+    sprite = document.createElement('canvas');
+    sprite.width = BLOCK_SIZE - 2 + GLOW_PAD * 2;
+    sprite.height = BLOCK_SIZE - 2 + GLOW_PAD * 2;
+    const sctx = sprite.getContext('2d')!;
+    sctx.fillStyle = color; sctx.shadowBlur = 10; sctx.shadowColor = color;
+    sctx.fillRect(GLOW_PAD, GLOW_PAD, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+    blockSpriteCache.set(color, sprite);
+  }
+  return sprite;
+};
+let gridLayer: HTMLCanvasElement | null = null;
+const getGridLayer = (width: number, height: number): HTMLCanvasElement => {
+  if (!gridLayer || gridLayer.width !== width || gridLayer.height !== height) {
+    gridLayer = document.createElement('canvas');
+    gridLayer.width = width; gridLayer.height = height;
+    const gctx = gridLayer.getContext('2d')!;
+    gctx.fillStyle = '#000000'; gctx.fillRect(0, 0, width, height);
+    gctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'; gctx.lineWidth = 1;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) gctx.strokeRect(c * BLOCK_SIZE, r * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+    }
+  }
+  return gridLayer;
+};
 // Versus-only: how often the game loop broadcasts this client's live board +
 // active piece to opponents (see the `update()` loop and MiniBoard), on top
 // of the existing once-per-lock broadcast. Frequent enough to read as
@@ -176,13 +232,12 @@ const SPAWN_HOTKEY_ACTIONS = [
 // The board-level (non-piece) sandbox hotkeys, shown in their own small grid.
 const SANDBOX_GENERAL_HOTKEY_ACTIONS = ['Clear Board', 'Toggle 0-G'] as const;
 
-// Every sandbox-only action name (general + piece), rebindable the same way
-// as the regular keybinds but kept out of the main Keybinds grid since they
-// only do anything in standard/sandbox mode.
-const SANDBOX_HOTKEY_ACTIONS = [
-  ...SANDBOX_GENERAL_HOTKEY_ACTIONS,
-  ...SPAWN_HOTKEY_ACTIONS.map((p) => p.action),
-] as const;
+// The only actions shown in the Settings tab's Keybinds grid. An allowlist (not
+// "everything except sandbox keys"): saved controls can carry foreign keys —
+// e.g. tetris-arena's 'Spawn Bar', 'Undo', 'Redo' — when that app has run on
+// the same origin, and a blocklist would let every one of them leak into this
+// panel. Spawn/sandbox bindings live in the Sandbox tab (Zen only).
+const GAMEPLAY_CONTROL_ACTIONS = ['Left', 'Right', 'Down', 'Rotate CW', 'Rotate CCW', 'Rotate 180', 'Hard Drop', 'Hold'] as const;
 
 // ==========================================
 // 1. PURE ENGINE FUNCTIONS
@@ -510,7 +565,7 @@ const TouchControlButton = ({
 // 2. MAIN REACT COMPONENT
 // ==========================================
 
-export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, onEliminated, eliminatedOpponentIds, opponentIds, onRematchMenu, seed, startingLevel, lives, onBoardUpdate, opponentBoards, opponentNicknames, onMatchWin, quitVotes, selfQuitVote, quitVoteDeadline, onQuitVote, onRetractQuitVote, sharedNextHold, journey, maxLevel, sprintGoal, blitzMinutes, onTSpin, onLinesCleared, onCombo, onPiecePlaced, onTopout }: TetrisGameProps) {
+export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, onEliminated, eliminatedOpponentIds, opponentIds, onRematchMenu, seed, startingLevel, lives, onBoardUpdate, opponentBoards, opponentNicknames, onMatchWin, quitVotes, selfQuitVote, quitVoteDeadline, onQuitVote, onRetractQuitVote, sharedNextHold, journey, maxLevel, sprintGoal, blitzMinutes, onTSpin, onLinesCleared, onCombo, onPiecePlaced, onTopout, onPauseChange }: TetrisGameProps) {
   // 'practice' = Sandbox's single-player ruleset (adjustable gravity, spawn
   // hotkeys, clear-on-topout, no leaderboard) running inside the same
   // multiplayer room/preview plumbing 'versus' uses, minus the competitive
@@ -535,6 +590,12 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   // closure can read this safely.
   const isJourneySolo = mode === 'journey';
   const isJourney = isJourneySolo || (isCoop && !!journey);
+  // Whether this mode offers a Settings button / pause (P or Esc). Versus and
+  // plain co-op deliberately don't — freezing your board while a live
+  // opponent/partner keeps playing is a free timeout. Journey does: solo
+  // freezes its challenge clock while paused (see useJourneyRun), and journey
+  // co-op is cooperative, so pausing only costs your own team.
+  const pauseAllowed = !(mode === 'versus' || (mode === 'coop' && !isJourney));
   // Mode-popup settings. Fixed for one mount like `mode`, so the mount-only
   // game loop's closure can read them. scoreKey is what the run is saved and
   // ranked under: default settings keep the bare 'sprint'/'blitz' keys.
@@ -626,6 +687,17 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   const [isPaused, setIsPaused] = useState(false);
   const isPausedRef = useRef(false);
   const [showControls, setShowControls] = useState(false);
+  // Tell the parent when the game pauses/resumes (Journey freezes its
+  // challenge clock on this). Latest callback via ref so it isn't a dep.
+  const onPauseChangeRef = useRef(onPauseChange);
+  useEffect(() => { onPauseChangeRef.current = onPauseChange; }, [onPauseChange]);
+  const reportedPausedRef = useRef(false);
+  useEffect(() => {
+    const paused = isPaused || showControls;
+    if (paused === reportedPausedRef.current) return;
+    reportedPausedRef.current = paused;
+    onPauseChangeRef.current?.(paused);
+  }, [isPaused, showControls]);
   const showControlsRef = useRef(false);
   // Which content the pause overlay shows — the regular keybinds/handling
   // settings, or (sandbox mode only) the gravity/board tools. Both share the
@@ -841,7 +913,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     'Rotate CW': 'ArrowUp', 'Rotate CCW': 'z', 'Rotate 180': 'a',
     'Hard Drop': ' ', 'Hold': 'c',
     // Sandbox-only hotkeys — rebindable the same way as the rest, but kept
-    // out of the main Keybinds grid (see SANDBOX_HOTKEY_ACTIONS) since they
+    // out of the main Keybinds grid (see GAMEPLAY_CONTROL_ACTIONS) since they
     // only do anything in standard/sandbox mode.
     'Clear Board': 'r', 'Toggle 0-G': 'g',
     'Spawn I': '1', 'Spawn O': '2', 'Spawn T': '3', 'Spawn S': '4',
@@ -878,7 +950,22 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       // object from before the sandbox hotkeys existed wouldn't have those
       // keys, and indexing a missing key later (e.g. `.replace()` on it in
       // the Hotkeys UI) would throw.
-      try { setControls(prev => ({ ...prev, ...JSON.parse(savedControls) })); } catch (e) { console.error('Failed to parse controls'); }
+      // Only restore bindings this game actually has. Another project served
+      // from the same origin (tetris-arena shares localhost:3000 in dev) saves
+      // its own action names — 'Spawn Bar', 'Undo', … — into the same
+      // `tetrisControls` key; spreading them in whole put those stray bindings
+      // in state, showed them in Settings, and wrote them back on every save.
+      try {
+        const parsed = JSON.parse(savedControls) as Record<string, unknown>;
+        setControls(prev => {
+          const next = { ...prev };
+          for (const action of Object.keys(prev) as (keyof typeof prev)[]) {
+            const saved = parsed?.[action];
+            if (typeof saved === 'string') next[action] = saved;
+          }
+          return next;
+        });
+      } catch (e) { console.error('Failed to parse controls'); }
     }
     setSettingsLoaded(true);
   }, []);
@@ -898,7 +985,48 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   }, [controls, settingsLoaded]);
 
   const keysDown = useRef({ left: false, right: false, down: false, hardDrop: false });
-  const dasTimers = useRef({ das: 0, arr: 0, dcd: 0 });
+  // Auto-shift is driven by each direction key's own press timestamp rather than
+  // by summing frame deltas: charge = (now - pressedAt), repeat moves due =
+  // floor((charge - DAS) / ARR) + 1, so DAS starts counting at the real instant
+  // of the keypress (not at the previous frame boundary) and the first repeat
+  // fires the moment DAS expires, like Jstris/TETR.IO. Per-key state also lets
+  // an older held key resume, already charged, when a newer opposite key is
+  // released. `dcd` is the remaining DAS-cut-delay (ms); while it runs the
+  // schedule is pushed back so DAS doesn't charge.
+  const dasTimers = useRef({
+    dcd: 0,
+    leftAt: 0, rightAt: 0,        // performance.now()-timebase press time of each key
+    leftMoves: 0, rightMoves: 0,  // auto-repeat moves already made for that press
+    last: 0 as -1 | 0 | 1,        // which direction was pressed most recently
+  });
+
+  // The direction auto-shift follows: the most recently pressed of the held
+  // keys (the old code always picked Left when both were down).
+  const activeDir = (): -1 | 0 | 1 => {
+    const { left, right } = keysDown.current;
+    if (left && right) return dasTimers.current.last === 1 ? 1 : -1;
+    return left ? -1 : right ? 1 : 0;
+  };
+  const pressDir = (dir: -1 | 1, at: number) => {
+    const t = dasTimers.current;
+    if (dir === -1) { keysDown.current.left = true; t.leftAt = at; t.leftMoves = 0; }
+    else { keysDown.current.right = true; t.rightAt = at; t.rightMoves = 0; }
+    t.last = dir;
+    t.dcd = 0;
+  };
+  const releaseDir = (dir: -1 | 1) => {
+    if (dir === -1) keysDown.current.left = false; else keysDown.current.right = false;
+    // Releasing the newer key hands control back to the older one, which keeps
+    // its charge (its timer was never reset).
+    const { left, right } = keysDown.current;
+    if (left && !right) dasTimers.current.last = -1;
+    else if (right && !left) dasTimers.current.last = 1;
+  };
+  const releaseAllKeys = () => {
+    keysDown.current.left = false; keysDown.current.right = false;
+    keysDown.current.down = false; keysDown.current.hardDrop = false;
+    dasTimers.current.last = 0;
+  };
 
   const [uiState, setUiState] = useState({ 
     score: 0, lines: 0, level: 1, next: nextPiecesRef.current.slice(0, 5), hold: null as number | null, actionText: '' 
@@ -1367,7 +1495,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
 
   const hardDrop = () => {
     const now = performance.now();
-    if (now - lastHardDropTimeRef.current < 100) return;
+    if (now - lastHardDropTimeRef.current < HARD_DROP_COOLDOWN_MS) return;
     lastHardDropTimeRef.current = now;
 
     const dist = getGhostY() - player.current.pos.y;
@@ -1385,12 +1513,12 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     } else {
       lastMoveRef.current = 'move';
       if (isLockingRef.current) {
-        if (lockResetsRef.current < 7) {
+        if (lockResetsRef.current < LOCK_RESET_LIMIT) {
           lockTimerRef.current = 0;
           lockResetsRef.current++;
         }
       }
-      return true; 
+      return true;
     }
   };
 
@@ -1415,7 +1543,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
            player.current.rotState = nextState;
            lastMoveRef.current = 'rotate';
            if (isLockingRef.current) {
-             if (lockResetsRef.current < 7) {
+             if (lockResetsRef.current < LOCK_RESET_LIMIT) {
                lockTimerRef.current = 0;
                lockResetsRef.current++;
              }
@@ -1446,7 +1574,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
             player.current.rotState = nextState;
             lastMoveRef.current = 'rotate';
             if (isLockingRef.current) {
-              if (lockResetsRef.current < 7) {
+              if (lockResetsRef.current < LOCK_RESET_LIMIT) {
                 lockTimerRef.current = 0;
                 lockResetsRef.current++;
               }
@@ -1524,12 +1652,11 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   // Sandbox) calls this with its own tab, so they act as independent toggles
   // that share one underlying pause overlay.
   const openPanel = (tab: 'controls' | 'sandbox') => {
-    // No pausing in versus or co-op — see the matching guard in
-    // handleKeyDown's Escape/'p' branch for why. Neither the pause overlay
-    // nor a Settings button is offered for either mode (co-op's keybind/
-    // handling adjustment, like versus's, happens ahead of time in the
-    // lobby's standalone Controls panel).
-    if (mode === 'versus' || mode === 'coop' || isJourneySolo) return;
+    // No pausing in versus or plain co-op — see pauseAllowed above for why.
+    // Neither the pause overlay nor a Settings button is offered for those
+    // (their keybind/handling adjustment happens ahead of time in the lobby's
+    // standalone Controls panel).
+    if (!pauseAllowed) return;
     if (gameState === 'COUNTDOWN') return;
     if (showControlsRef.current && settingsTab === tab) {
       showControlsRef.current = false;
@@ -1589,15 +1716,12 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   // holding a move button repeats exactly like holding the arrow key does.
   const touchMoveStart = (dir: -1 | 1) => {
     if (!canAct()) return;
-    if (dir === -1) keysDown.current.left = true; else keysDown.current.right = true;
-    dasTimers.current.das = 0;
-    dasTimers.current.arr = 0;
-    dasTimers.current.dcd = 0;
+    pressDir(dir, performance.now());
     playerMove(dir);
     countAction();
   };
   const touchMoveEnd = (dir: -1 | 1) => {
-    if (dir === -1) keysDown.current.left = false; else keysDown.current.right = false;
+    releaseDir(dir);
   };
   const touchSoftDropStart = () => {
     if (!canAct()) return;
@@ -1657,8 +1781,9 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
             ctx.strokeRect((x + offset.x) * BLOCK_SIZE + 1, (y + offset.y) * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
             ctx.globalAlpha = 1.0;
           } else {
-            ctx.fillStyle = color; ctx.shadowBlur = 10; ctx.shadowColor = color;
-            ctx.fillRect((x + offset.x) * BLOCK_SIZE + 1, (y + offset.y) * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+            // Pre-rendered block + glow (see getBlockSprite) instead of a live
+            // shadowBlur fill per cell.
+            ctx.drawImage(getBlockSprite(color), (x + offset.x) * BLOCK_SIZE + 1 - GLOW_PAD, (y + offset.y) * BLOCK_SIZE + 1 - GLOW_PAD);
           }
         }
       });
@@ -1666,11 +1791,9 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   };
 
   const draw = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
-    ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'; ctx.lineWidth = 1;
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) ctx.strokeRect(c * BLOCK_SIZE, r * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-    }
+    // Black background + grid come from a cached layer (see getGridLayer).
+    ctx.shadowBlur = 0; ctx.globalAlpha = 1.0;
+    ctx.drawImage(getGridLayer(canvas.width, canvas.height), 0, 0);
     drawMatrix(ctx, board.current, { x: 0, y: 0 });
     // Co-op: the partner's live piece, drawn from the same broadcast data
     // already powering opponent previews elsewhere — just composited onto
@@ -1776,29 +1899,38 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       }
 
       if (!isPausedRef.current && !showControlsRef.current) {
-        if (keysDown.current.left || keysDown.current.right) {
-          if (dasTimers.current.dcd > 0) {
-            dasTimers.current.dcd -= deltaTime;
+        const shiftDir = activeDir();
+        if (shiftDir !== 0) {
+          const t = dasTimers.current;
+          if (t.dcd > 0) {
+            // DAS cut delay (after a spawn/hold with a key held): no charging
+            // and no repeats — push both press times back by the elapsed frame.
+            t.dcd -= deltaTime;
+            t.leftAt += deltaTime;
+            t.rightAt += deltaTime;
           } else {
-            dasTimers.current.das += deltaTime;
-            if (dasTimers.current.das >= tuningRef.current.das) {
-              dasTimers.current.arr += deltaTime;
-              const currentArr = tuningRef.current.arr;
-              if (currentArr === 0) {
+            const pressedAt = shiftDir === -1 ? t.leftAt : t.rightAt;
+            // Clamp: a keydown timestamp can sit a hair after this frame's rAF
+            // timestamp if it arrived mid-frame.
+            const charge = Math.max(0, time - pressedAt);
+            const dasMs = tuningRef.current.das;
+            if (charge >= dasMs) {
+              const arrMs = tuningRef.current.arr;
+              if (arrMs === 0) {
                 let moved = true;
-                while(moved) moved = playerMove(keysDown.current.left ? -1 : 1);
+                while (moved) moved = playerMove(shiftDir);
               } else {
-                while (dasTimers.current.arr >= currentArr) {
-                  playerMove(keysDown.current.left ? -1 : 1);
-                  dasTimers.current.arr -= currentArr;
-                }
+                // First repeat lands exactly when DAS expires, then every ARR.
+                const due = Math.floor((charge - dasMs) / arrMs) + 1;
+                const made = shiftDir === -1 ? t.leftMoves : t.rightMoves;
+                // Cap per frame so a long stall can't replay a huge backlog.
+                const steps = Math.min(due - made, COLS);
+                for (let i = 0; i < steps; i++) playerMove(shiftDir);
+                const newMade = steps < due - made ? due : made + Math.max(0, steps);
+                if (shiftDir === -1) t.leftMoves = newMade; else t.rightMoves = newMade;
               }
             }
           }
-        } else {
-          dasTimers.current.das = 0;
-          dasTimers.current.arr = 0;
-          dasTimers.current.dcd = 0;
         }
 
         if (keysDown.current.down) {
@@ -1887,27 +2019,32 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       if (listeningActionRef.current) {
         e.preventDefault();
         const targetAction = listeningActionRef.current;
-        setControls(prev => ({ ...prev, [targetAction]: e.key }));
+        setControls(prev => ({ ...prev, [targetAction]: normKey(e.key) }));
         listeningActionRef.current = null;
         setListeningAction(null);
         return;
       }
-      
+
       const c = controlsRef.current;
-      const mappedKeys = Object.values(c);
-      
-      if (mappedKeys.includes(e.key) || e.key === 'p' || e.key === 'Escape') {
-        e.preventDefault(); 
+      // Compared case-insensitively (see normKey): Caps Lock / Shift would
+      // otherwise turn 'z' into 'Z' and silently stop the bound key working.
+      const k = normKey(e.key);
+      const is = (action: string) => k === normKey(c[action as keyof typeof c]);
+      const mappedKeys = Object.values(c).map(normKey);
+
+      // (Escape is handled separately in handleEscape below, in the capture
+      // phase, so it never reaches this handler.)
+      if (mappedKeys.includes(k) || k === 'p') {
+        e.preventDefault();
       }
-      
-      // Versus and co-op deliberately have no pause: freezing your own
+
+      // Versus and plain co-op deliberately have no pause: freezing your own
       // board (gravity, clock, DAS) while a live opponent/partner keeps
       // playing is a "no" in real time — it's a free timeout only you get.
       // Keybind/handling adjustment for both lives in the lobby's
       // standalone ControlsSettings panel instead, before the match starts.
-      // Journey (solo too) runs on a wall-clock challenge schedule, so pausing
-      // would just let the windows tick away — it has no pause either.
-      if ((e.key === 'p' || e.key === 'Escape') && mode !== 'versus' && mode !== 'coop' && !isJourneySolo) {
+      // Journey can pause (see pauseAllowed).
+      if (k === 'p' && pauseAllowed) {
         const willShow = !showControlsRef.current;
         showControlsRef.current = willShow;
         setShowControls(willShow);
@@ -1919,57 +2056,92 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       if (isPausedRef.current || showControlsRef.current) return;
       if (e.repeat) return; 
 
-      if (e.key === c['Left']) {
-        keysDown.current.left = true;
-        dasTimers.current.das = 0;
-        dasTimers.current.arr = 0;
-        dasTimers.current.dcd = 0;
+      if (is('Left')) {
+        // The press time (not "now at the next frame") is when DAS starts.
+        pressDir(-1, e.timeStamp);
         playerMove(-1);
         countAction();
       }
-      else if (e.key === c['Right']) {
-        keysDown.current.right = true;
-        dasTimers.current.das = 0;
-        dasTimers.current.arr = 0;
-        dasTimers.current.dcd = 0;
+      else if (is('Right')) {
+        pressDir(1, e.timeStamp);
         playerMove(1);
         countAction();
       }
-      else if (e.key === c['Down']) { keysDown.current.down = true; countAction(); }
-      else if (e.key === c['Rotate CW']) { playerRotate(1); countAction(); }
-      else if (e.key === c['Rotate CCW']) { playerRotate(-1); countAction(); }
-      else if (e.key === c['Rotate 180']) { playerRotate(2); countAction(); }
-      else if (e.key === c['Hard Drop']) {
+      else if (is('Down')) { keysDown.current.down = true; countAction(); }
+      else if (is('Rotate CW')) { playerRotate(1); countAction(); }
+      else if (is('Rotate CCW')) { playerRotate(-1); countAction(); }
+      else if (is('Rotate 180')) { playerRotate(2); countAction(); }
+      else if (is('Hard Drop')) {
         if (!keysDown.current.hardDrop) {
             keysDown.current.hardDrop = true;
             hardDrop();
             countAction();
         }
       }
-      else if (e.key === c['Hold']) { holdPiece(); countAction(); }
-      else if (isSandboxRules && e.key === c['Clear Board']) clearSandboxBoard();
-      else if (isSandboxRules && e.key === c['Toggle 0-G']) toggleZeroGravity();
+      else if (is('Hold')) { holdPiece(); countAction(); }
+      else if (isSandboxRules && is('Clear Board')) clearSandboxBoard();
+      else if (isSandboxRules && is('Toggle 0-G')) toggleZeroGravity();
       else if (isSandboxRules) {
-        const pieceHotkey = SPAWN_HOTKEY_ACTIONS.find((p) => e.key === c[p.action]);
+        const pieceHotkey = SPAWN_HOTKEY_ACTIONS.find((p) => is(p.action));
         if (pieceHotkey) spawnSandboxPiece(pieceHotkey.type);
       }
     };
 
+    // Releases are processed in every game state (not just PLAYING): a key let
+    // go during a countdown/result screen used to be ignored, leaving its
+    // "held" flag stuck — e.g. the hard-drop flag would then swallow the first
+    // drop of the next round.
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (gameStateRef.current !== 'PLAYING') return;
       const c = controlsRef.current;
-      
-      if (e.key === c['Left']) keysDown.current.left = false;
-      if (e.key === c['Right']) keysDown.current.right = false;
-      if (e.key === c['Down']) keysDown.current.down = false;
-      if (e.key === c['Hard Drop']) keysDown.current.hardDrop = false;
+      const k = normKey(e.key);
+      const is = (action: string) => k === normKey(c[action as keyof typeof c]);
+
+      if (is('Left')) releaseDir(-1);
+      if (is('Right')) releaseDir(1);
+      if (is('Down')) keysDown.current.down = false;
+      if (is('Hard Drop')) keysDown.current.hardDrop = false;
     };
 
+    // Losing focus (alt-tab, clicking another window) means keyups never reach
+    // the page — without this a held direction kept sliding the piece.
+    const handleBlur = () => releaseAllKeys();
+
+    // Esc means "back to the game screen", never "close the window".
+    // TetrisModal closes itself on Escape via a bubble-phase window listener,
+    // which used to tear down a run in progress (and a score being entered).
+    // This runs in the capture phase and stops the event before that handler
+    // sees it, so Esc is fully owned by the game while one is mounted:
+    //   rebinding a key  -> cancel the rebind
+    //   playing, can pause -> toggle Settings (same as P) — i.e. Esc from the
+    //                         Settings/Sandbox panel returns to the board
+    //   anything else (countdown, result screen, versus/co-op) -> nothing
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      e.preventDefault();
+      if (e.repeat) return;
+      if (listeningActionRef.current) {
+        listeningActionRef.current = null;
+        setListeningAction(null);
+        return;
+      }
+      if (gameStateRef.current !== 'PLAYING' || !pauseAllowed) return;
+      const willShow = !showControlsRef.current;
+      showControlsRef.current = willShow;
+      setShowControls(willShow);
+      isPausedRef.current = willShow;
+      setIsPaused(willShow);
+    };
+
+    window.addEventListener('keydown', handleEscape, true);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-    return () => { 
-      window.removeEventListener('keydown', handleKeyDown); 
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleEscape, true);
+      window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
       if (requestRef.current) cancelAnimationFrame(requestRef.current); 
     };
   }, []);
@@ -2057,7 +2229,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
               handleKeyDown for why pausing isn't allowed there. Keybinds/
               handling for both are set ahead of time in the lobby's
               Controls panel instead. */}
-          {(gameState === 'PLAYING' || gameState === 'COUNTDOWN') && mode !== 'versus' && mode !== 'coop' && !isJourneySolo && (
+          {(gameState === 'PLAYING' || gameState === 'COUNTDOWN') && pauseAllowed && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: isMobile ? '0.6rem' : '1.5rem' }}>
               <button
                 onClick={() => openPanel('controls')}
@@ -2305,9 +2477,9 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
               <>
                 <p style={{ color: 'var(--tt-accent)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 0.75rem 0', alignSelf: 'flex-start' }}>Keybinds</p>
                 <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '1.5rem' }}>
-                  {Object.entries(controls)
-                    .filter(([action]) => action !== 'null' && !(SANDBOX_HOTKEY_ACTIONS as readonly string[]).includes(action))
-                    .map(([action, keyName]) => (
+                  {GAMEPLAY_CONTROL_ACTIONS.map((action) => {
+                    const keyName = controls[action];
+                    return (
                     <div key={action} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                       <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '9px', textTransform: 'uppercase', textAlign: 'center' }}>
                         {action}
@@ -2322,7 +2494,8 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
                         {listeningAction === action ? '...' : (keyName === ' ' ? 'Space' : keyName.replace('Arrow', ''))}
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>

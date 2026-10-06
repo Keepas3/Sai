@@ -63,6 +63,8 @@ function JourneySoloRun({ onMenu, onPlayAgain, winScore }: { onMenu: () => void;
         onCombo={run.handleCombo}
         onPiecePlaced={run.handlePiecePlaced}
         onTopout={run.handleTopout}
+        // Opening Settings pauses the board AND freezes the challenge clock.
+        onPauseChange={run.setPaused}
       />
       <JourneyRacerBar score={run.totalScore} label="You" winScore={winScore} />
     </div>
