@@ -689,6 +689,12 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   const [showControls, setShowControls] = useState(false);
   // Tell the parent when the game pauses/resumes (Journey freezes its
   // challenge clock on this). Latest callback via ref so it isn't a dep.
+  // The mount-only key listener below reaches onMenu through this ref, and
+  // only offers Esc-to-title in solo modes (see handleEscape).
+  const onMenuRef = useRef(onMenu);
+  useEffect(() => { onMenuRef.current = onMenu; }, [onMenu]);
+  const escLeavesRef = useRef(false);
+  useEffect(() => { escLeavesRef.current = !(isMultiplayerRoom || isCoop); }, [isMultiplayerRoom, isCoop]);
   const onPauseChangeRef = useRef(onPauseChange);
   useEffect(() => { onPauseChangeRef.current = onPauseChange; }, [onPauseChange]);
   const reportedPausedRef = useRef(false);
@@ -2106,15 +2112,15 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
     // the page — without this a held direction kept sliding the piece.
     const handleBlur = () => releaseAllKeys();
 
-    // Esc means "back to the game screen", never "close the window".
+    // Esc means "back to the title screen", never "close the window".
     // TetrisModal closes itself on Escape via a bubble-phase window listener,
-    // which used to tear down a run in progress (and a score being entered).
-    // This runs in the capture phase and stops the event before that handler
-    // sees it, so Esc is fully owned by the game while one is mounted:
-    //   rebinding a key  -> cancel the rebind
-    //   playing, can pause -> toggle Settings (same as P) — i.e. Esc from the
-    //                         Settings/Sandbox panel returns to the board
-    //   anything else (countdown, result screen, versus/co-op) -> nothing
+    // which used to tear down the whole modal. This runs in the capture phase
+    // and stops the event before that handler sees it, so Esc is fully owned
+    // by the game while one is mounted:
+    //   rebinding a key -> cancel the rebind
+    //   solo modes      -> leave to the title screen (same as the Quit button),
+    //                      from any state: countdown, playing, Settings, result
+    //   versus/co-op    -> nothing; leaving there is the Quit vote
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
@@ -2125,12 +2131,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
         setListeningAction(null);
         return;
       }
-      if (gameStateRef.current !== 'PLAYING' || !pauseAllowed) return;
-      const willShow = !showControlsRef.current;
-      showControlsRef.current = willShow;
-      setShowControls(willShow);
-      isPausedRef.current = willShow;
-      setIsPaused(willShow);
+      if (escLeavesRef.current) onMenuRef.current();
     };
 
     window.addEventListener('keydown', handleEscape, true);
