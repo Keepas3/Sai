@@ -145,7 +145,7 @@ export default function PrivacyPolicyPage() {
           <UL>
             <LI>Raining Blocks control bindings and handling settings (DAS/ARR/SDF, keybinds)</LI>
             <LI>Site background theme choice</LI>
-            <LI>Fortune slip draw history: when you last drew, your current streak, and the streak reward text</LI>
+            <LI>Fortune slip draw history: when you last drew, your current streak, the streak reward text, and whether you hold a butterfly streak charm (plus how many butterflies have appeared this week)</LI>
             <LI>The nickname you choose for online Raining Blocks play (so you don&apos;t have to retype it each time)</LI>
           </UL>
           <P>

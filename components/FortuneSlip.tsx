@@ -1,6 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import FortuneButterfly from './FortuneButterfly';
+import {
+  getFortuneWeekId,
+  loadButterflyWeek,
+  loadHasCharm,
+  rollButterfly,
+  saveButterflyWeek,
+  saveHasCharm,
+} from './fortuneCharm';
 
 interface FortuneSlip {
   title: string;
@@ -25,6 +34,18 @@ interface FortuneSlipProps {
 // (or just delete this block) before shipping.
 const DEV_FAST_FORWARD = false;
 const DEV_RESET_INTERVAL_MS = 15_000; // 15 seconds per "day" while testing
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// TESTING MODE — FOR LOCAL TESTING ONLY.
+// While `DEV_ALWAYS_BUTTERFLY` is true, the blue butterfly appears on EVERY
+// draw, ignoring the 40%/20% odds, the weekly cap and an already-held charm.
+// It can only ever take effect under `next dev`: the `NODE_ENV` check means a
+// production build (the deployed site) ignores it even if this is left on, so
+// forgetting to switch it off can't ship a butterfly-every-time site. Set it
+// to `false` to try the real odds locally.
+const DEV_ALWAYS_BUTTERFLY = false;
+const ALWAYS_BUTTERFLY = DEV_ALWAYS_BUTTERFLY && process.env.NODE_ENV !== 'production';
 // ---------------------------------------------------------------------------
 
 const MIN_SHAKES = DEV_FAST_FORWARD ? 1 : 3;
@@ -168,16 +189,31 @@ function getWeekdayLabel(date: Date): string {
 // available. If they skipped one or more resets, it's a fresh streak of 1.
 // Reaching a 7-day cycle boundary does NOT reset this — only a missed day
 // does. See `getCycleDay` for the part that repeats every 7 days.
-function computeUpdatedStreak(now: number, previousPeriodEnd: number | null, previousStreak: number): number {
+//
+// A butterfly charm (see fortuneCharm.ts) forgives exactly one missed day: if
+// `now` lands in the window after the *next* one, the streak carries on
+// (previous + 1; the missed day itself isn't counted) and the charm is used
+// up. Any longer gap still resets to 1 and leaves the charm unspent.
+function computeUpdatedStreak(
+  now: number,
+  previousPeriodEnd: number | null,
+  previousStreak: number,
+  hasCharm: boolean
+): { streak: number; charmUsed: boolean } {
   if (previousPeriodEnd === null || !Number.isFinite(previousPeriodEnd)) {
-    return 1;
+    return { streak: 1, charmUsed: false };
   }
   // Nudge a second past the boundary so re-running the reset calculation
   // from that exact instant correctly advances to the *following* reset
   // instead of returning the same one (since it lands exactly on 4:00:00).
   const nextBoundary = getNextPeriodBoundary(new Date(previousPeriodEnd + 1000));
-  const isConsecutive = now < nextBoundary;
-  return isConsecutive ? previousStreak + 1 : 1;
+  if (now < nextBoundary) return { streak: previousStreak + 1, charmUsed: false };
+
+  if (hasCharm && previousStreak > 0) {
+    const boundaryAfterMissedDay = getNextPeriodBoundary(new Date(nextBoundary + 1000));
+    if (now < boundaryAfterMissedDay) return { streak: previousStreak + 1, charmUsed: true };
+  }
+  return { streak: 1, charmUsed: false };
 }
 
 // Maps the uncapped day-streak onto its position within the current 7-day
@@ -211,6 +247,12 @@ export default function FortuneSlip({
   // button (a later visit). The very first reveal right after drawing on
   // day 7 still shows the normal fortune content, same as any other day.
   const [isViewingRewardMessage, setIsViewingRewardMessage] = useState(false);
+  // Butterfly charm: `hasCharm` is the saved "streak is protected" state;
+  // the other three only describe the draw currently showing in the popup.
+  const [hasCharm, setHasCharm] = useState(false);
+  const [butterflyOffered, setButterflyOffered] = useState(false);
+  const [butterflyCaught, setButterflyCaught] = useState(false);
+  const [charmSavedStreak, setCharmSavedStreak] = useState(false);
   const boxButtonRef = useRef<HTMLButtonElement | null>(null);
   // Timestamp of the most recent open, so a stray tap landing right as the
   // popup appears (e.g. the shake gesture's last tap bleeding through) can't
@@ -248,6 +290,7 @@ export default function FortuneSlip({
       if (storedMessage) {
         setOmamoriMessage(storedMessage);
       }
+      setHasCharm(loadHasCharm());
     } catch {
       // localStorage may be unavailable (private browsing, etc.) — fail open.
       setNextAvailableAt(null);
@@ -315,6 +358,16 @@ export default function FortuneSlip({
     setShakeCount(0);
     setShakesNeeded(randomShakesNeeded());
     setIsViewingRewardMessage(false);
+    setButterflyOffered(false);
+    setButterflyCaught(false);
+    setCharmSavedStreak(false);
+  };
+
+  // Catching the butterfly is what actually grants the charm.
+  const handleCatchButterfly = () => {
+    setButterflyCaught(true);
+    setHasCharm(true);
+    saveHasCharm(true);
   };
 
   const handleOpen = (event?: MouseEvent<HTMLButtonElement>) => {
@@ -365,8 +418,31 @@ export default function FortuneSlip({
           // ignore — treated as a fresh streak below
         }
 
-        const updatedStreak = computeUpdatedStreak(now, previousPeriodEnd, previousStreak);
+        const charmActive = loadHasCharm();
+        const { streak: updatedStreak, charmUsed } = computeUpdatedStreak(
+          now,
+          previousPeriodEnd,
+          previousStreak,
+          charmActive
+        );
         setStreak(updatedStreak);
+        if (charmUsed) saveHasCharm(false);
+        setHasCharm(charmActive && !charmUsed);
+        setCharmSavedStreak(charmUsed);
+
+        // Only now (with a spent charm already cleared) roll for a new
+        // butterfly. It counts toward the weekly cap as soon as it shows up,
+        // whether or not it gets caught.
+        const butterfly = rollButterfly({
+          hasCharm: charmActive && !charmUsed,
+          stored: loadButterflyWeek(),
+          week: getFortuneWeekId(nextTime),
+          rand: Math.random(),
+          force: ALWAYS_BUTTERFLY,
+        });
+        saveButterflyWeek(butterfly.next);
+        setButterflyOffered(butterfly.show);
+        setButterflyCaught(false);
         const updatedCycleDay = getCycleDay(updatedStreak);
 
         // Roll the history forward: a fresh cycle (cycle day 1 — either the
@@ -671,7 +747,13 @@ export default function FortuneSlip({
                         <span>
                           {streak}-Day Streak
                         </span>
+                        {hasCharm && <span title="Butterfly charm active: your streak survives one missed day">🦋</span>}
                       </div>
+                    )}
+                    {charmSavedStreak && (
+                      <p className="mt-1.5 text-center text-[11px] font-semibold text-[#1e6fd9]">
+                        🦋 Your butterfly charm kept your streak alive.
+                      </p>
                     )}
 
                     <div className="mt-5 rounded-[12px] border border-[#8b5a3c]/20 bg-[#fffdf8]/85 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
@@ -727,6 +809,13 @@ export default function FortuneSlip({
                 )}
               </div>
             </div>
+
+            {/* After the paper (and outside its overflow-hidden) so it can
+                overhang the corner. Only on a fresh draw, never when
+                re-opening the omamori reward. */}
+            {butterflyOffered && !isViewingRewardMessage && (
+              <FortuneButterfly caught={butterflyCaught} onCatch={handleCatchButterfly} />
+            )}
           </div>
         </div>
       )}
