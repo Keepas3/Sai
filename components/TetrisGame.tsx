@@ -651,8 +651,21 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   // starting from the same seed means both bags are the same underlying
   // sequence rather than two unrelated random streams). Solo modes and
   // practice fall through to Math.random.
-  const rngRef = useRef<() => number>((mode === 'versus' || mode === 'coop' || isJourneySolo) && seed != null ? mulberry32(seed) : Math.random);
-  const nextPiecesRef = useRef<number[]>([...generateBag(rngRef.current), ...generateBag(rngRef.current)]);
+  //
+  // Built inside a lazy useState initializer (runs once), NOT as a useRef
+  // argument: a useRef argument is re-evaluated on every render and the
+  // result thrown away, and generateBag() consumes the seeded generator —
+  // so every re-render silently advanced it, and two same-seed players'
+  // sequences drifted apart after the first 14 pieces (whenever their render
+  // counts differed). The generator and its first two bags are created
+  // together so the kept queue always matches the kept generator.
+  const [seededStart] = useState(() => {
+    const rng: () => number =
+      (mode === 'versus' || mode === 'coop' || isJourneySolo) && seed != null ? mulberry32(seed) : Math.random;
+    return { rng, queue: [...generateBag(rng), ...generateBag(rng)] };
+  });
+  const rngRef = useRef<() => number>(seededStart.rng);
+  const nextPiecesRef = useRef<number[]>(seededStart.queue);
   const holdPieceRef = useRef<number | null>(null);
   const canHoldRef = useRef(true);
 
