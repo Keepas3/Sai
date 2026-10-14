@@ -610,13 +610,19 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   const onComboRef = useRef(onCombo);
   const onPiecePlacedRef = useRef(onPiecePlaced);
   const onTopoutRef = useRef(onTopout);
+  // Same reason for onAttack: the parent's handler is rebuilt as eliminations
+  // arrive (it picks a target among the opponents still alive), but the game
+  // loop would otherwise keep the one from mount, when nobody was eliminated
+  // yet, and keep aiming garbage at players who are already out.
+  const onAttackRef = useRef(onAttack);
   useEffect(() => {
     onTSpinRef.current = onTSpin;
     onLinesClearedRef.current = onLinesCleared;
     onComboRef.current = onCombo;
     onPiecePlacedRef.current = onPiecePlaced;
     onTopoutRef.current = onTopout;
-  }, [onTSpin, onLinesCleared, onCombo, onPiecePlaced, onTopout]);
+    onAttackRef.current = onAttack;
+  }, [onTSpin, onLinesCleared, onCombo, onPiecePlaced, onTopout, onAttack]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const timeDisplayRef = useRef<HTMLParagraphElement>(null);
   const requestRef = useRef<number>(0);
@@ -694,6 +700,11 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
   const [countdownText, setCountdownText] = useState<number | string>(3);
 
   const [leaderboard, setLeaderboard] = useState<ScoreEntry[]>([]);
+  // handleGameOver runs inside the mount-only game loop, so reading
+  // `leaderboard` there would see the empty mount-time list forever and treat
+  // every score as a high score. It reads this ref instead.
+  const leaderboardRef = useRef(leaderboard);
+  useEffect(() => { leaderboardRef.current = leaderboard; }, [leaderboard]);
   const [nameInput, setNameInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -1260,10 +1271,11 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       return;
     }
 
-    const isHighScore = leaderboard.length < MAX_LEADERBOARD || 
-      (mode === 'sprint' 
-        ? currentScore < (leaderboard[leaderboard.length - 1]?.score || Infinity)
-        : currentScore > (leaderboard[leaderboard.length - 1]?.score || 0));
+    const topScores = leaderboardRef.current;
+    const isHighScore = topScores.length < MAX_LEADERBOARD ||
+      (mode === 'sprint'
+        ? currentScore < (topScores[topScores.length - 1]?.score || Infinity)
+        : currentScore > (topScores[topScores.length - 1]?.score || 0));
     
     if (isHighScore && currentScore > 0) {
       setGameState('NAME_ENTRY');
@@ -1441,7 +1453,7 @@ export default function TetrisGame({ mode, onMenu, onAttack, incomingGarbage, on
       pendingGarbageRef.current -= cancelled;
       const netAttack = attack - cancelled;
       if (netAttack > 0) {
-        onAttack?.(netAttack);
+        onAttackRef.current?.(netAttack);
         linesSentRef.current += netAttack;
         setLinesSent(linesSentRef.current);
         const min = elapsedTimeRef.current / 60000;
