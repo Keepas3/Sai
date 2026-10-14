@@ -159,7 +159,7 @@ export default function AccordionGallery({
 
         // Dynamic tag mirrors the same pattern already used in
         // app/projects/page.tsx for its project cards.
-        const Tag = (item.link ? 'a' : 'div') as any;
+        const Tag: React.ElementType = item.link ? 'a' : 'div';
         // Only force a new tab for external links — an internal route (e.g.
         // "/projects/slug") should navigate in-tab like any other link.
         // Same convention already used in BlogLinkButton.tsx / the blog's

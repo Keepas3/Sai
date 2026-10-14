@@ -99,7 +99,7 @@ export default function SakuraCanvas() {
         rareImage.onerror = () => console.error(`Failed loading rare layout path: ${rarePath}`);
 
         let animationFrameId: number;
-        const petalsArray: any[] = [];
+        const petalsArray: Petal[] = [];
         const maxPetals = 30; 
 
         // --- VIEWPORT & RESOLUTION TRACKING ---

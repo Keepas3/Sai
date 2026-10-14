@@ -82,7 +82,7 @@ export default function Footer() {
           {activeQuote ? (
             <>
               <p className="font-serif text-lg md:text-xl text-[#f2e6e9] italic leading-relaxed tracking-wide drop-shadow-md m-0">
-                "{activeQuote.text}"
+                &quot;{activeQuote.text}&quot;
               </p>
               {activeQuote.author && (
                 <span

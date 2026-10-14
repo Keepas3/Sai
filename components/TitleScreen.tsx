@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../app/utils/supabaseClient'; // Adjust path if needed
 import { useBackgroundTheme } from './UseBackgroundTheme'; // Adjust path if needed
 import { useResources, type Resource } from './useResources';
-import ControlsSettings from './ControlsSettings';
 import ModeSettingsDialog from './ModeSettingsDialog';
 import {
   BLITZ_MINUTES, DEFAULT_BLITZ_MINUTES, DEFAULT_SPRINT_GOAL, SPRINT_GOALS, scoreKeyFor,

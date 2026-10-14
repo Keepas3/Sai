@@ -1,16 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link'; 
-import { defineQuery } from 'next-sanity';
 
-
-const CATEGORIES_QUERY = defineQuery(`
-  *[_type == "category" && defined(slug.current)] {
-    _id,
-    title,
-    "slug": slug.current
-  }
-`)
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
 

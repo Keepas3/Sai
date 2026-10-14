@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import { client } from '@/sanity/lib/client';
 import TetrisModal from '@/components/TetrisModal';
-import TetrisGame from '@/components/TetrisGame';
 import { useSearchParam } from '@/components/useSearchParam';
 
 interface MediaItem {
@@ -60,7 +59,7 @@ export default function LibraryPage() {
           setGames(data.gamesData?.gamesList || []);
           setBooks(data.booksData?.booksList || []);
         }
-      } catch (err) {
+      } catch {
         console.error("Sonlander");
       } finally {
         setIsLoading(false);
@@ -287,7 +286,7 @@ export default function LibraryPage() {
                           <p className={`text-xs text-white/60 leading-relaxed italic px-1 transition-all
                             ${isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-1 truncate'}
                           `}>
-                            "{item.review}"
+                            &quot;{item.review}&quot;
                           </p>
                           
                           <span className="text-[9px] font-mono text-pink-400/60 uppercase tracking-widest mt-2 block hover:text-pink-400">

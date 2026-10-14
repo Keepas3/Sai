@@ -1,4 +1,4 @@
-export default {
+const game = {
   name: 'game',
   type: 'document',
   title: 'Games Page Settings',
@@ -79,3 +79,5 @@ export default {
     }
   ]
 };
+
+export default game;

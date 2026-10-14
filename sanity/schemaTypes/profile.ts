@@ -1,4 +1,6 @@
-export default {
+import type { Rule } from 'sanity';
+
+const profile = {
   name: 'profile',
   title: 'Profile & Homepage',
   type: 'document',
@@ -39,9 +41,11 @@ export default {
       type: 'array',
       title: 'Featured Dashboard Games',
       description: 'Select and drag-and-drop order your games up to 5.',
-      validation: (Rule: any) => Rule.max(5).error('You can only feature up to 5 games!'),
+      validation: (Rule: Rule) => Rule.max(5).error('You can only feature up to 5 games!'),
       of: [{ type: 'reference', to: [{ type: 'game' }] }]
     },
    
   ],
 };
+
+export default profile;

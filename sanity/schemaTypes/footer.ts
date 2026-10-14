@@ -1,4 +1,6 @@
-export default {
+import type { Rule } from 'sanity';
+
+const footerSettings = {
   name: 'footerSettings',
   title: 'Footer Settings',
   type: 'document',
@@ -18,7 +20,7 @@ export default {
       description: 'How long should each quote stay on screen before fading to the next one?',
       type: 'number',
       initialValue: 10,
-      validation: (Rule: any) => Rule.required().min(3).max(60),
+      validation: (Rule: Rule) => Rule.required().min(3).max(60),
     },
     {
       name: 'zenQuotes',
@@ -34,7 +36,7 @@ export default {
               title: 'Quote Text',
               type: 'text',
               rows: 3,
-              validation: (Rule: any) => Rule.required(),
+              validation: (Rule: Rule) => Rule.required(),
             },
             {
               name: 'author',
@@ -48,3 +50,5 @@ export default {
     },
   ],
 };
+
+export default footerSettings;

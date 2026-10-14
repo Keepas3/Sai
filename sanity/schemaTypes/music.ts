@@ -1,4 +1,6 @@
-export default {
+import type { Rule } from 'sanity';
+
+const musicPage = {
   name: 'musicPage',
   type: 'document',
   title: 'Music Page Content',
@@ -23,7 +25,7 @@ export default {
       type: 'array',
       title: 'Top 3 Songs',
       description: 'Add up to 3 of your current favorite tracks.',
-      validation: (Rule: any) => Rule.max(3).error('You can only feature up to 3 tracks!'),
+      validation: (Rule: Rule) => Rule.max(3).error('You can only feature up to 3 tracks!'),
       of: [
         {
           type: 'object',
@@ -43,7 +45,7 @@ export default {
       type: 'array',
       title: 'Playlist Topics / Moods',
       description: 'Create custom music sections (e.g., Lofi, High Energy). You can add up to 3 topics.',
-      validation: (Rule: any) => Rule.max(6).error('You can feature up to 6 different playlist topics!'),
+      validation: (Rule: Rule) => Rule.max(6).error('You can feature up to 6 different playlist topics!'),
       of: [
         {
           type: 'object',
@@ -67,7 +69,7 @@ export default {
               type: 'array',
               title: 'Playlist Links',
               description: 'Paste up to 4 different playlist URLs under this topic.',
-              validation: (Rule: any) => Rule.max(4).error('Up to 4 playlists per topic.'),
+              validation: (Rule: Rule) => Rule.max(4).error('Up to 4 playlists per topic.'),
               of: [{ type: 'url' }]
             }
           ]
@@ -75,4 +77,6 @@ export default {
       ]
     }
   ]
-}
+};
+
+export default musicPage;

@@ -1,4 +1,6 @@
-export default {
+import type { Rule } from 'sanity';
+
+const fortuneSlip = {
   name: 'fortuneSlip',
   title: 'Fortune Slips',
   type: 'document',
@@ -26,14 +28,14 @@ export default {
               name: 'title',
               title: 'Slip Title',
               type: 'string',
-              validation: (Rule: any) => Rule.required().min(1).max(80),
+              validation: (Rule: Rule) => Rule.required().min(1).max(80),
             },
             {
               name: 'preview',
               title: 'Preview Text',
               description: 'Short teaser shown before the slip is opened.',
               type: 'string',
-              validation: (Rule: any) => Rule.required().min(1).max(140),
+              validation: (Rule: Rule) => Rule.required().min(1).max(140),
             },
             {
               name: 'note',
@@ -41,7 +43,7 @@ export default {
               description: 'The full message shown when the slip is opened.',
               type: 'text',
               rows: 6,
-              validation: (Rule: any) => Rule.required().min(1),
+              validation: (Rule: Rule) => Rule.required().min(1),
             },
           ],
           preview: {
@@ -55,3 +57,5 @@ export default {
     },
   ],
 };
+
+export default fortuneSlip;

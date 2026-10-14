@@ -3,12 +3,12 @@ import { notFound } from 'next/navigation';
 import Navbar from "@/components/Navbar";
 import { PortableText } from '@portabletext/react';
 import Link from 'next/link';
-import imageUrlBuilder from '@sanity/image-url';
+import imageUrlBuilder, { type SanityImageSource } from '@sanity/image-url';
 import { richTextComponents } from '@/components/richTextComponents';
 import AccordionGallery, { type AccordionGalleryItem } from '@/components/AccordionGallery';
 
 const builder = imageUrlBuilder(client);
-function urlFor(source: any) {
+function urlFor(source: SanityImageSource) {
   return builder.image(source);
 }
 
@@ -40,7 +40,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     notFound();
   }
 
-  const galleryItems: AccordionGalleryItem[] = (project.images || []).map((image: any) => ({
+  const galleryItems: AccordionGalleryItem[] = (project.images || []).map((image: SanityImageSource) => ({
     image: urlFor(image).url(),
     alt: project.title,
   }));

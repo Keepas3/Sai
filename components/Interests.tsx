@@ -8,7 +8,7 @@ export default function Interests() {
         {/* Left Side: The Living Room Vibe */}
         <div className="interests-block">
           <h2 className="interests-title">Current Obsessions</h2>
-          <p className="interests-subtitle">What's occupying my screen and speakers right now.</p>
+          <p className="interests-subtitle">What&apos;s occupying my screen and speakers right now.</p>
           
           <div className="now-card">
             <div className="card-icon">🎧</div>

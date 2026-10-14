@@ -72,8 +72,8 @@ export async function GET() {
         console.log('📻 Spotify History 3:', thirdRecentTrackData.title);
       }
     }
-  } catch (e: any) {
-    console.error('❌ Crash Core Exception during fetch operations:', e.message);
+  } catch (e) {
+    console.error('❌ Crash Core Exception during fetch operations:', e instanceof Error ? e.message : e);
   }
 
   console.log('--- END BACKEND FETCH PIPELINE ---\n');
