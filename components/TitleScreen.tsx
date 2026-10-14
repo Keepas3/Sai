@@ -100,7 +100,7 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
       const ascending = viewMode === 'sprint';
 
       // The all-time best score for this mode — pinned at the top no
-      // matter what month it happened in.
+      // matter what quarter it happened in.
       const { data: bestData, error: bestError } = await supabase
         .from('tetris_scores')
         .select('name, score, level, mode')
@@ -111,26 +111,26 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
       const best = !bestError && bestData && bestData.length > 0 ? bestData[0] : null;
       setAllTimeBest(best);
 
-      // This month's top 10 — resets automatically as soon as the
-      // calendar rolls into a new month (anchored to UTC so the reset
-      // happens at the same instant for everyone, not each viewer's
-      // local midnight).
+      // This quarter's top 10 — resets automatically as soon as the
+      // calendar rolls into a new quarter (Jan 1, Apr 1, Jul 1, Oct 1;
+      // anchored to UTC so the reset happens at the same instant for
+      // everyone, not each viewer's local midnight).
       const now = new Date();
-      const startOfMonthUTC = new Date(
-        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+      const startOfQuarterUTC = new Date(
+        Date.UTC(now.getUTCFullYear(), Math.floor(now.getUTCMonth() / 3) * 3, 1)
       ).toISOString();
 
       const { data, error } = await supabase
         .from('tetris_scores')
         .select('name, score, level, mode')
         .eq('mode', leaderboardKey)
-        .gte('created_at', startOfMonthUTC)
+        .gte('created_at', startOfQuarterUTC)
         .order('score', { ascending })
         .limit(10); // limit of scores shown
 
       if (!error && data) {
         // Avoid showing the pinned all-time best a second time if it
-        // also happened to be set this month.
+        // also happened to be set this quarter.
         const withoutDuplicate = best
           ? data.filter((entry) => !(entry.name === best.name && entry.score === best.score))
           : data;
@@ -429,7 +429,7 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
           })}
         </div>
 
-        {/* All-time best, pinned above the monthly list */}
+        {/* All-time best, pinned above the quarterly list */}
         {allTimeBest && (
           <div
             style={{
@@ -461,7 +461,7 @@ export default function TitleScreen({ onPlay }: TitleScreenProps) {
             margin: '0 0 0.5rem 0',
           }}
         >
-          This Month
+          This Quarter
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minHeight: '120px' }}>
