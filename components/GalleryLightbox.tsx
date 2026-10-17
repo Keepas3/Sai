@@ -14,9 +14,14 @@ interface GalleryLightboxProps {
   activeIndex: number | null;
   onClose: () => void;
   onNavigate: (index: number) => void;
+  // The "Gallery Container" cinematic overlay for the open photo, if one is
+  // currently playing — drawn over the picture. The page owns when it starts
+  // and ends (see the trigger logic in app/gallery/page.tsx); the fullscreen
+  // style isn't handled here, the page draws that above this whole lightbox.
+  containerOverlay?: { videoUrl: string; visible: boolean; onEnded: () => void } | null;
 }
 
-export default function GalleryLightbox({ photos, activeIndex, onClose, onNavigate }: GalleryLightboxProps) {
+export default function GalleryLightbox({ photos, activeIndex, onClose, onNavigate, containerOverlay = null }: GalleryLightboxProps) {
   const [mounted, setMounted] = useState(false);
   const isOpen = activeIndex !== null;
   const photo = activeIndex !== null ? photos[activeIndex] : null;
@@ -136,11 +141,36 @@ export default function GalleryLightbox({ photos, activeIndex, onClose, onNaviga
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               padding: '2rem', backgroundColor: '#000'
             }}>
-              <img
-                src={photo.url}
-                alt={photo.title}
-                style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain', display: 'block', borderRadius: '8px' }}
-              />
+              {/* Shrink-wraps the photo so the overlay can cover exactly it */}
+              <div style={{ position: 'relative', display: 'inline-flex', maxWidth: '100%' }}>
+                <img
+                  src={photo.url}
+                  alt={photo.title}
+                  style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain', display: 'block', borderRadius: '8px' }}
+                />
+                {containerOverlay && (
+                  <div
+                    style={{
+                      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                      zIndex: 5, pointerEvents: 'none',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      opacity: containerOverlay.visible ? 1 : 0,
+                      transition: 'opacity 1s ease-in-out',
+                      backgroundColor: containerOverlay.visible ? 'rgba(0,0,0,0.5)' : 'transparent',
+                      borderRadius: '8px', overflow: 'hidden'
+                    }}
+                  >
+                    <video
+                      key={`lightbox-vid-${photo.key}`}
+                      src={containerOverlay.videoUrl}
+                      autoPlay
+                      playsInline
+                      onEnded={containerOverlay.onEnded}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             <div style={{ padding: '1rem 1.5rem 1.5rem', textAlign: 'center' }}>

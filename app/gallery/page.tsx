@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import Navbar from "@/components/Navbar";
 import { client } from '@/sanity/lib/client';
 import GalleryDriftWall, { type FlatPhoto } from "@/components/GalleryDriftWall";
@@ -22,15 +23,27 @@ interface Topic {
   items: GalleryItem[];
 }
 
-// Raw shape of the second, lighter GROQ projection used to build the "All
-// Photos" detailed view — deliberately omits overlayVideoUrl/overlayStyle
-// (irrelevant to that view) and includes _key so each image can be flattened
-// into a stable, addressable FlatPhoto below.
+// Raw shape of the second GROQ projection used to build the "All Photos"
+// detailed view — includes _key so each image can be flattened into a
+// stable, addressable FlatPhoto below, and the overlay fields so a photo's
+// cinematic overlay also plays when it's opened in the lightbox.
 interface AlbumForWall {
   _id: string;
   title: string;
-  images: { _key: string; title: string; description?: string; url: string }[];
+  images: {
+    _key: string;
+    title: string;
+    description?: string;
+    url: string;
+    overlayVideoUrl?: string;
+    overlayStyle?: 'fullscreen' | 'container';
+  }[];
 }
+
+// A single shared empty list for "no album open". A fresh `[]` every render
+// would change the overlay effect's dependencies on every render and keep
+// resetting its 1-second trigger timer.
+const NO_SLIDES: GalleryItem[] = [];
 
 export default function GalleryPage() {
   const OVERLAY_TRIGGER_CHANCE = 0.30;  
@@ -111,7 +124,9 @@ export default function GalleryPage() {
                 _key,
                 title,
                 description,
-                "url": image.asset->url
+                "url": image.asset->url,
+                "overlayVideoUrl": overlayVideo.asset->url,
+                overlayStyle
               }, [])
             }
           }
@@ -135,6 +150,8 @@ export default function GalleryPage() {
               description: image.description,
               albumId: album._id,
               albumTitle: album.title,
+              overlayVideoUrl: image.overlayVideoUrl,
+              overlayStyle: image.overlayStyle,
             });
           }
         }
@@ -167,7 +184,7 @@ export default function GalleryPage() {
   };
 
   const activeTopic = topics.find(t => t._id === activeTopicId);
-  const filteredSlides = activeTopic && activeTopic.items ? activeTopic.items : [];
+  const filteredSlides = activeTopic && activeTopic.items ? activeTopic.items : NO_SLIDES;
 
   const prevSlide = () => setCurrentIndex((prev) => (prev === 0 ? filteredSlides.length - 1 : prev - 1));
   const nextSlide = () => setCurrentIndex((prev) => (prev === filteredSlides.length - 1 ? 0 : prev + 1));
@@ -181,6 +198,25 @@ export default function GalleryPage() {
     setOverlayState('hidden'); 
   };
 
+  // The photo whose overlay is currently eligible to play: the photo open in
+  // the lightbox (the "All Photos" wall), otherwise the current album slide.
+  // Both feed the same trigger below, so they share the same rules and the
+  // same played-videos memory — a video that already played in one view stays
+  // used in the other.
+  const overlaySource = lightboxIndex !== null ? allPhotos[lightboxIndex] : filteredSlides[currentIndex];
+  const overlaySourceKey = lightboxIndex !== null ? `wall-${lightboxIndex}` : `album-${activeTopicId}-${currentIndex}`;
+  const sourceVideoUrl = overlaySource?.overlayVideoUrl;
+  const sourceStyle = overlaySource?.overlayStyle;
+
+  // Ends the current overlay: fade out, then clear it.
+  const finishOverlay = () => {
+    setOverlayState('fading');
+    setTimeout(() => {
+      setOverlayState('hidden');
+      setActiveOverlayVideo(null);
+    }, 1000);
+  };
+
   // --- Smart Video Trigger Logic with Memory ---
   useEffect(() => {
     let triggerTimer: NodeJS.Timeout;
@@ -188,10 +224,7 @@ export default function GalleryPage() {
     setOverlayState('hidden');
     setActiveOverlayVideo(null);
 
-    const currentSlide = filteredSlides[currentIndex];
-    const videoUrl = currentSlide?.overlayVideoUrl;
-
-    if (videoUrl && !playedVideosRef.current.has(videoUrl)) {
+    if (sourceVideoUrl && !playedVideosRef.current.has(sourceVideoUrl)) {
       triggerTimer = setTimeout(() => {
         const shouldTriggerOverlay = Math.random() < OVERLAY_TRIGGER_CHANCE;
         if (!shouldTriggerOverlay) {
@@ -199,18 +232,18 @@ export default function GalleryPage() {
         }
 
         // ◄ Read the specific style for this picture (default to fullscreen if empty)
-        setActiveOverlayStyle(currentSlide.overlayStyle || 'fullscreen');
-        setActiveOverlayVideo(videoUrl);
+        setActiveOverlayStyle(sourceStyle || 'fullscreen');
+        setActiveOverlayVideo(sourceVideoUrl);
         setOverlayState('visible');
-        
-        playedVideosRef.current.add(videoUrl);
-      }, 1000); 
+
+        playedVideosRef.current.add(sourceVideoUrl);
+      }, 1000);
     }
 
     return () => {
       clearTimeout(triggerTimer);
     };
-  }, [currentIndex, activeTopicId, filteredSlides, OVERLAY_TRIGGER_CHANCE]);
+  }, [overlaySourceKey, sourceVideoUrl, sourceStyle, OVERLAY_TRIGGER_CHANCE]);
 
   useEffect(() => {
     if (overlayState === 'visible' && activeOverlayVideo && activeOverlayStyle === 'fullscreen') {
@@ -515,7 +548,7 @@ export default function GalleryPage() {
                             <img src={slide.url} alt={slide.title} className="gallery-image" />
                             
                             {/* STYLE 1: THE IN-BOX CONTAINER OVERLAY */}
-                            {currentIndex === index && overlayState !== 'hidden' && activeOverlayVideo && activeOverlayStyle === 'container' && (
+                            {lightboxIndex === null && currentIndex === index && overlayState !== 'hidden' && activeOverlayVideo && activeOverlayStyle === 'container' && (
                               <div 
                                 style={{
                                   position: 'absolute',
@@ -538,13 +571,7 @@ export default function GalleryPage() {
                                   autoPlay
                                   playsInline
                                   
-                                  onEnded={() => {
-                                    setOverlayState('fading');
-                                    setTimeout(() => {
-                                      setOverlayState('hidden');
-                                      setActiveOverlayVideo(null);
-                                    }, 1000); 
-                                  }}
+                                  onEnded={finishOverlay}
                                   style={{
                                     width: '100%',
                                     height: '100%',
@@ -596,21 +623,30 @@ export default function GalleryPage() {
         activeIndex={lightboxIndex}
         onClose={() => setLightboxIndex(null)}
         onNavigate={setLightboxIndex}
+        // STYLE 1 for the lightbox: plays inside the lightbox's picture box.
+        containerOverlay={
+          lightboxIndex !== null && overlayState !== 'hidden' && activeOverlayVideo && activeOverlayStyle === 'container'
+            ? { videoUrl: activeOverlayVideo, visible: overlayState === 'visible', onEnded: finishOverlay }
+            : null
+        }
       />
 
       {/* =========================================
           STYLE 2: THE GLOBAL FULL-SCREEN OVERLAY
           ========================================= */}
-      {overlayState !== 'hidden' && activeOverlayVideo && activeOverlayStyle === 'fullscreen' && (
-        <div 
+      {overlayState !== 'hidden' && activeOverlayVideo && activeOverlayStyle === 'fullscreen' && (() => {
+        const overlay = (
+        <div
           onClick={() => {
             void playFullscreenWithAudio();
           }}
           style={{
             position: 'fixed',
             top: 0, left: 0, right: 0, bottom: 0,
-            zIndex: 999999, 
-            pointerEvents: 'auto', 
+            // One above GalleryLightbox (999999), which is mounted later in
+            // the DOM and would otherwise cover this when it's open.
+            zIndex: 1000000,
+            pointerEvents: 'auto',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -621,7 +657,7 @@ export default function GalleryPage() {
         >
           <video 
             ref={fullscreenVideoRef}
-            key={`global-vid-${currentIndex}`}
+            key={`global-vid-${overlaySourceKey}`}
             src={activeOverlayVideo} 
             autoPlay
             playsInline
@@ -629,13 +665,7 @@ export default function GalleryPage() {
               void playFullscreenWithAudio();
             }}
             
-            onEnded={() => {
-              setOverlayState('fading');
-              setTimeout(() => {
-                setOverlayState('hidden');
-                setActiveOverlayVideo(null);
-              }, 1000); 
-            }}
+            onEnded={finishOverlay}
             style={{
               width: '100%',
               height: '100%',
@@ -644,7 +674,14 @@ export default function GalleryPage() {
             }}
           />
         </div>
-      )}
+        );
+        // This page's wrapper (.content-wrapper, z-index 1) is its own
+        // stacking context, so no z-index in here can rise above the
+        // lightbox, which is a portal on <body>. While the lightbox is open,
+        // render the overlay on <body> too so it actually covers it; in the
+        // album view it stays exactly where it always was.
+        return lightboxIndex !== null ? createPortal(overlay, document.body) : overlay;
+      })()}
 
     </div>
   );

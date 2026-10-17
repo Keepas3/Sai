@@ -21,6 +21,10 @@ export interface FlatPhoto {
   description?: string;
   albumId: string;
   albumTitle: string;
+  // Optional cinematic overlay from Sanity — played by the page when this
+  // photo is opened in the lightbox (same rules as the album slideshow).
+  overlayVideoUrl?: string;
+  overlayStyle?: 'fullscreen' | 'container';
 }
 
 interface GalleryDriftWallProps {
