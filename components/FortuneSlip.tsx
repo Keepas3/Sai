@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import FortuneButterfly from './FortuneButterfly';
 import {
+  getFortuneDayIndex,
   getFortuneWeekId,
   loadButterflyWeek,
   loadHasCharm,
@@ -65,8 +66,12 @@ const STREAK_HISTORY_KEY = 'fortune-slip:streak-history';
 // Persists the chosen reward message so it survives a page reload while the
 // player is still within the reward day (before the next reset clears it).
 const STREAK_OMAMORI_MESSAGE_KEY = 'fortune-slip:streak-omamori-message';
+// The streak value the current 7-day omamori cycle counts from. It stays 0
+// (the cycle follows the streak exactly) until a butterfly charm bridges a
+// gap: the streak number carries on, but the omamori count starts over.
+const STREAK_CYCLE_BASE_KEY = 'fortune-slip:streak-cycle-base';
 
-// From day 3 onward, show the fortunes collected so far this cycle.
+// Show the weekly calendar once it has at least this many marks on it.
 const HISTORY_VISIBLE_FROM_STREAK = 2;
 
 // Closing is ignored for this long after the popup opens, so a tap that
@@ -76,9 +81,10 @@ const HISTORY_VISIBLE_FROM_STREAK = 2;
 const MIN_VISIBLE_MS = 800;
 // The overall day-streak counts up indefinitely and never resets just for
 // reaching this — only missing a day resets it. What this controls is the
-// *cycle*: every time the streak hits a multiple of this many days, the
+// *cycle*: every time this many days in a row have really been drawn, the
 // omamori reward triggers and the weekly history starts over, while the
-// streak count itself keeps climbing (8, 9, 10, ...).
+// streak count itself keeps climbing (8, 9, 10, ...). A butterfly charm keeps
+// the streak going but restarts the cycle's count (see STREAK_CYCLE_BASE_KEY).
 const STREAK_CYCLE_LENGTH = 7;
 
 // Shown once, chosen at random, the moment the 7-day omamori is earned.
@@ -96,6 +102,30 @@ const OMAMORI_MESSAGES = [
   "This one isn't left to chance — you built it, day by day.",
   "Hold onto this. It remembers the week you didn't quit.",
   'Fortune finds the lucky. This charm finds the persistent.',
+];
+
+// One-off lines for the day the streak reaches these lengths. The streak number
+// is what counts, so a streak the butterfly charm kept alive still reaches
+// them. Kept off multiples of 7, where the omamori already lands.
+const STREAK_MILESTONES: Record<number, string> = {
+  10: 'Ten days running. A habit is taking root.',
+  30: 'Thirty days. A whole month of showing up.',
+  100: 'One hundred days. This kind of luck is built, not found.',
+};
+
+// From this streak on, an ordinary draw gets a short line of encouragement,
+// stepping through the list one day at a time (so a given day always reads the
+// same, even after a reload).
+const ENCOURAGEMENT_FROM_STREAK = 5;
+const ENCOURAGEMENTS = [
+  'Showing up is the whole trick.',
+  'Small days add up to big luck.',
+  'The box remembers every visit.',
+  'Luck likes a regular.',
+  'One more day, one more thread.',
+  'Steady wins the fortune.',
+  'Another day kept. Well done.',
+  'Come back tomorrow. The box will be waiting.',
 ];
 
 // Returns the epoch ms timestamp of the next occurrence of RESET_HOUR_EASTERN
@@ -162,6 +192,9 @@ function getNextPeriodBoundary(referenceDate: Date): number {
 interface StreakEntry {
   weekday: string; // 'Sun' | 'Mon' | ... — see WEEKDAY_ORDER
   title: string;
+  // Fortune-day index of the draw (see getFortuneDayIndex), so a mark can age
+  // off the calendar. Missing on entries saved before this existed.
+  day?: number;
 }
 
 const WEEKDAY_ORDER = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -190,10 +223,10 @@ function getWeekdayLabel(date: Date): string {
 // Reaching a 7-day cycle boundary does NOT reset this — only a missed day
 // does. See `getCycleDay` for the part that repeats every 7 days.
 //
-// A butterfly charm (see fortuneCharm.ts) forgives exactly one missed day: if
-// `now` lands in the window after the *next* one, the streak carries on
-// (previous + 1; the missed day itself isn't counted) and the charm is used
-// up. Any longer gap still resets to 1 and leaves the charm unspent.
+// A butterfly charm (see fortuneCharm.ts) holds the streak for however long
+// the player is away: the first open after any gap carries it on (previous +
+// 1; the missed days themselves aren't counted) and the charm is used up. An
+// open in the very next window doesn't need it, so the charm is kept.
 function computeUpdatedStreak(
   now: number,
   previousPeriodEnd: number | null,
@@ -209,16 +242,14 @@ function computeUpdatedStreak(
   const nextBoundary = getNextPeriodBoundary(new Date(previousPeriodEnd + 1000));
   if (now < nextBoundary) return { streak: previousStreak + 1, charmUsed: false };
 
-  if (hasCharm && previousStreak > 0) {
-    const boundaryAfterMissedDay = getNextPeriodBoundary(new Date(nextBoundary + 1000));
-    if (now < boundaryAfterMissedDay) return { streak: previousStreak + 1, charmUsed: true };
-  }
+  if (hasCharm && previousStreak > 0) return { streak: previousStreak + 1, charmUsed: true };
   return { streak: 1, charmUsed: false };
 }
 
-// Maps the uncapped day-streak onto its position within the current 7-day
-// cycle (1-7, repeating). Day 7 of a cycle is the omamori/reward day and the
-// weekly history table; day 1 of the next cycle is where both reset.
+// Maps a count of days drawn in a row (the streak, minus where the current
+// cycle began) onto its position within the 7-day cycle (1-7, repeating). Day 7
+// is the omamori/reward day and the weekly history table; day 1 of the next
+// cycle is where both reset.
 function getCycleDay(streakValue: number): number {
   if (streakValue <= 0) return 0;
   return ((streakValue - 1) % STREAK_CYCLE_LENGTH) + 1;
@@ -241,6 +272,8 @@ export default function FortuneSlip({
   const [hasCheckedStorage, setHasCheckedStorage] = useState(false);
   const [emergeOrigin, setEmergeOrigin] = useState<{ x: number; y: number } | null>(null);
   const [streak, setStreak] = useState(0);
+  // See STREAK_CYCLE_BASE_KEY: the omamori cycle day is counted from here.
+  const [cycleBase, setCycleBase] = useState(0);
   const [streakHistory, setStreakHistory] = useState<StreakEntry[]>([]);
   const [omamoriMessage, setOmamoriMessage] = useState<string | null>(null);
   // True only when the popup was opened by tapping the *persisted* omamori
@@ -286,6 +319,10 @@ export default function FortuneSlip({
       if (Number.isFinite(storedStreak) && storedStreak > 0) {
         setStreak(storedStreak);
       }
+      const storedCycleBase = Number(window.localStorage.getItem(STREAK_CYCLE_BASE_KEY));
+      if (Number.isFinite(storedCycleBase) && storedCycleBase > 0) {
+        setCycleBase(storedCycleBase);
+      }
       const storedMessage = window.localStorage.getItem(STREAK_OMAMORI_MESSAGE_KEY);
       if (storedMessage) {
         setOmamoriMessage(storedMessage);
@@ -330,7 +367,8 @@ export default function FortuneSlip({
   // True for the whole cooldown window following a cycle-day-7 draw (day 7,
   // 14, 21, ...) — the omamori takes the box's place and stays visible for
   // the rest of that day, instead of the box just disappearing like normal.
-  const isRewardCooldown = hasCheckedStorage && !isAvailable && getCycleDay(streak) === STREAK_CYCLE_LENGTH;
+  const cycleDay = getCycleDay(streak - cycleBase);
+  const isRewardCooldown = hasCheckedStorage && !isAvailable && cycleDay === STREAK_CYCLE_LENGTH;
 
   useEffect(() => {
     if (!isOpen) {
@@ -410,10 +448,13 @@ export default function FortuneSlip({
         // Read what was stored from the *previous* open before overwriting it.
         let previousPeriodEnd: number | null = null;
         let previousStreak = 0;
+        let previousCycleBase = 0;
         try {
           const storedPeriodEnd = Number(window.localStorage.getItem(STREAK_PERIOD_KEY));
           previousPeriodEnd = Number.isFinite(storedPeriodEnd) && storedPeriodEnd > 0 ? storedPeriodEnd : null;
           previousStreak = Number(window.localStorage.getItem(STREAK_COUNT_KEY)) || 0;
+          const storedCycleBase = Number(window.localStorage.getItem(STREAK_CYCLE_BASE_KEY));
+          previousCycleBase = Number.isFinite(storedCycleBase) && storedCycleBase > 0 ? storedCycleBase : 0;
         } catch {
           // ignore — treated as a fresh streak below
         }
@@ -425,7 +466,14 @@ export default function FortuneSlip({
           previousStreak,
           charmActive
         );
+        // The streak number always carries on, but the omamori count only
+        // follows it while the days were really drawn: a streak that broke
+        // (back to 1) or was bridged by the charm both start a fresh cycle
+        // today, so the charm never helps earn the omamori — that still takes
+        // 7 real days, i.e. every day of the calendar filled in.
+        const updatedCycleBase = charmUsed ? previousStreak : updatedStreak === 1 ? 0 : previousCycleBase;
         setStreak(updatedStreak);
+        setCycleBase(updatedCycleBase);
         if (charmUsed) saveHasCharm(false);
         setHasCharm(charmActive && !charmUsed);
         setCharmSavedStreak(charmUsed);
@@ -443,12 +491,13 @@ export default function FortuneSlip({
         saveButterflyWeek(butterfly.next);
         setButterflyOffered(butterfly.show);
         setButterflyCaught(false);
-        const updatedCycleDay = getCycleDay(updatedStreak);
+        const updatedCycleDay = getCycleDay(updatedStreak - updatedCycleBase);
 
         // Roll the history forward: a fresh cycle (cycle day 1 — either the
         // streak broke, or the previous cycle just completed on day 7)
         // starts over with just today's fortune; otherwise today's entry
-        // gets added to whatever was collected so far this cycle.
+        // gets added to whatever was collected so far this cycle. (A charm
+        // save is also cycle day 1, but keeps its recent marks — see below.)
         let previousHistory: StreakEntry[] = [];
         try {
           const storedHistoryRaw = window.localStorage.getItem(STREAK_HISTORY_KEY);
@@ -463,8 +512,19 @@ export default function FortuneSlip({
           previousHistory = [];
         }
 
-        const todayEntry: StreakEntry = { weekday: getWeekdayLabel(new Date(now)), title };
-        const updatedHistory = updatedCycleDay === 1 ? [todayEntry] : [...previousHistory, todayEntry];
+        const todayDay = getFortuneDayIndex(nextTime);
+        const todayEntry: StreakEntry = { weekday: getWeekdayLabel(new Date(now)), title, day: todayDay };
+        // The calendar only ever shows the last 7 days, so a mark older than
+        // that drops off. This matters after a charm-bridged gap: marks from
+        // before it stay beside today's while still inside the week, with the
+        // missed days left empty. (An entry saved before marks were dated is
+        // kept, except right after a gap where its age can't be known.)
+        const isOnCalendar = (entry: StreakEntry) =>
+          typeof entry.day === 'number' ? entry.day > todayDay - WEEKDAY_ORDER.length : !charmUsed;
+        const updatedHistory =
+          updatedCycleDay === 1 && !charmUsed
+            ? [todayEntry]
+            : [...previousHistory.filter(isOnCalendar), todayEntry];
         setStreakHistory(updatedHistory);
 
         const rewardMessage =
@@ -476,6 +536,7 @@ export default function FortuneSlip({
         try {
           window.localStorage.setItem(STORAGE_KEY, String(nextTime));
           window.localStorage.setItem(STREAK_COUNT_KEY, String(updatedStreak));
+          window.localStorage.setItem(STREAK_CYCLE_BASE_KEY, String(updatedCycleBase));
           window.localStorage.setItem(STREAK_PERIOD_KEY, String(nextTime));
           window.localStorage.setItem(STREAK_HISTORY_KEY, JSON.stringify(updatedHistory));
           if (rewardMessage) {
@@ -518,6 +579,14 @@ export default function FortuneSlip({
   const shakeIntensity = 4 + shakeCount * 2.5;
   const isCurrentFinalShake = shakeCount >= shakesNeeded;
   const shakeDurationMs = isCurrentFinalShake ? 750 : 320;
+
+  // A milestone replaces the encouragement line, and so does the butterfly
+  // charm's own message, so the slip never stacks three lines under the streak.
+  const milestoneLine = STREAK_MILESTONES[streak] ?? null;
+  const encouragement =
+    !milestoneLine && !charmSavedStreak && streak >= ENCOURAGEMENT_FROM_STREAK
+      ? ENCOURAGEMENTS[(streak - ENCOURAGEMENT_FROM_STREAK) % ENCOURAGEMENTS.length]
+      : null;
 
   return (
     <>
@@ -747,13 +816,26 @@ export default function FortuneSlip({
                         <span>
                           {streak}-Day Streak
                         </span>
-                        {hasCharm && <span title="Butterfly charm active: your streak survives one missed day">🦋</span>}
+                        {hasCharm && <span title="Butterfly charm active: your streak is saved until you're back">🦋</span>}
                       </div>
                     )}
                     {charmSavedStreak && (
-                      <p className="mt-1.5 text-center text-[11px] font-semibold text-[#1e6fd9]">
-                        🦋 Your butterfly charm kept your streak alive.
+                      <>
+                        <p className="mt-1.5 text-center text-[11px] font-semibold text-[#1e6fd9]">
+                          🦋 Your butterfly charm kept your streak alive.
+                        </p>
+                        <p className="mt-0.5 text-center text-[10px] italic text-[#8b5a3c]/80">
+                          Complete all 7 days to find something extra.
+                        </p>
+                      </>
+                    )}
+                    {milestoneLine && (
+                      <p className="mt-2 text-center text-[12px] font-semibold leading-5 text-[#7a1f12]">
+                        ✦ {milestoneLine} ✦
                       </p>
+                    )}
+                    {encouragement && (
+                      <p className="mt-1.5 text-center text-[11px] italic text-[#8b5a3c]/80">{encouragement}</p>
                     )}
 
                     <div className="mt-5 rounded-[12px] border border-[#8b5a3c]/20 bg-[#fffdf8]/85 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
@@ -766,7 +848,7 @@ export default function FortuneSlip({
                       {teaser}
                     </p>
 
-                    {getCycleDay(streak) >= HISTORY_VISIBLE_FROM_STREAK && streakHistory.length > 0 && (
+                    {streakHistory.length >= HISTORY_VISIBLE_FROM_STREAK && (
                       <div className="mt-4 rounded-[10px] border border-[#8b5a3c]/20 bg-[#fffdf8]/70 p-3">
                         <p className="text-center text-[10px] font-mono uppercase tracking-[0.3em] text-[#8b5a3c]">
                           This Week's Fortunes

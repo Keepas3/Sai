@@ -17,15 +17,20 @@ export interface ButterflyWeekState {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Calendar-week id (Monday start) of the fortune-day a draw belongs to.
-// `boundaryMs` is the 4 AM Eastern reset that ends that fortune-day, so the
+// Whole-day index of the fortune-day a draw belongs to (consecutive fortune-days
+// differ by exactly 1). `boundaryMs` is the 4 AM Eastern reset that ends that
+// fortune-day. Subtracting 12h puts both EST (09:00 UTC) and EDT (08:00 UTC)
+// boundaries on the previous UTC day, i.e. the fortune-day's own date.
+export function getFortuneDayIndex(boundaryMs: number): number {
+  return Math.floor((boundaryMs - 12 * 60 * 60 * 1000) / DAY_MS);
+}
+
+// Calendar-week id (Monday start) of the fortune-day a draw belongs to, so the
 // week rolls over at Monday 4 AM Eastern, the same clock as the daily reset.
-// Subtracting 12h puts both EST (09:00 UTC) and EDT (08:00 UTC) boundaries on
-// the previous UTC day, i.e. the fortune-day's own date. Day 0 of the epoch is
-// a Thursday, hence the +3 to make Monday the first day of the week.
+// Day 0 of the epoch is a Thursday, hence the +3 to make Monday the first day
+// of the week.
 export function getFortuneWeekId(boundaryMs: number): number {
-  const dayIndex = Math.floor((boundaryMs - 12 * 60 * 60 * 1000) / DAY_MS);
-  return Math.floor((dayIndex + 3) / 7);
+  return Math.floor((getFortuneDayIndex(boundaryMs) + 3) / 7);
 }
 
 export function loadHasCharm(): boolean {

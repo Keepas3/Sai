@@ -153,7 +153,7 @@ export default function FortuneButterfly({ caught, onCatch }: FortuneButterflyPr
               Good luck charm
             </p>
             <p className="mt-1 text-[12px] leading-[1.45]">
-              Your streak will continue, even if you miss a day.
+              Your streak will continue, even if you miss days.
             </p>
           </div>
         )}

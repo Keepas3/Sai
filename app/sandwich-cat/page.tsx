@@ -2,7 +2,7 @@ import Navbar from "@/components/Navbar";
 import Link from "next/link";
 
 export const metadata = {
-  title: "Sandwich Cat | Sai",
+  title: "Sandwich Cat",
   description: "You found the rarest cat in the garden.",
 };
 
